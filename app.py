@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from calendar import month_name
 
 st.set_page_config(page_title="TrekVerse | India Budget Travel", page_icon="🧭", layout="wide")
@@ -101,9 +102,9 @@ div.stButton > button {background:#12a9ce;color:white;border:0;border-radius:9px
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="hero">', unsafe_allow_html=True)
-st.title("🧭 TrekVerse V3 — India Travel & Itinerary Assistant")
+st.title("🧭 TrekVerse V4 — India AI-Style Travel Assistant")
 st.write("Find destinations across India, compare estimated costs and generate a downloadable day-wise travel itinerary.")
-st.caption("Free V3 • 60+ destinations • Day-wise itinerary builder • No paid API key • No live fares or hotel quotes")
+st.caption("Free V4 • India-wide destination finder • Day-wise itinerary builder • Chat-style travel assistant • No paid API key")
 st.markdown('</div>', unsafe_allow_html=True)
 
 with st.sidebar:
@@ -270,21 +271,126 @@ else:
     st.info("First adjust your budget, days, travellers and filters until at least one destination appears. Then you can generate its itinerary.")
 
 st.divider()
-st.subheader("Ask TrekVerse")
-question = st.text_input("Ask a simple travel question", placeholder="Example: Which low-cost places are good for nature?")
-if question:
-    q = question.lower()
-    if "snow" in q:
-        names = [d["place"] for d in DESTINATIONS if "Snow" in d["tags"]]
-        st.info("Snow-oriented options in this database: " + ", ".join(names) + ". Snow is seasonal and never guaranteed.")
-    elif any(w in q for w in ["food","eat","cuisine"]):
-        names = [d["place"] for d in DESTINATIONS if "Food" in d["tags"]]
-        st.info("Food-oriented options include: " + ", ".join(names[:18]) + ".")
-    elif any(w in q for w in ["beach","sea"]):
-        names = [d["place"] for d in DESTINATIONS if "Nature" in d["tags"] and d["region"] in ["West","South","Islands"]]
-        st.info("Coastal/island options to explore include: " + ", ".join(names[:18]) + ".")
+st.header("🤖 V4 — Chat with TrekVerse")
+st.write("Ask in everyday language. Try: “I have ₹5,000, want nature, and can travel for 2 days from Indore.”")
+
+def trekverse_reply(user_text):
+    q = user_text.lower()
+    # Extract a budget amount such as ₹5000, 5,000 or 5k.
+    budget_match = re.search(r'(?:₹|rs\.?\s*)?(\d[\d,]*)\s*(k)?', q)
+    chat_budget = None
+    if budget_match:
+        raw = budget_match.group(1).replace(",", "")
+        chat_budget = int(raw) * (1000 if budget_match.group(2) else 1)
+        if chat_budget < 500:
+            chat_budget = None
+
+    day_match = re.search(r'(\d{1,2})\s*(?:days?|nights?)', q)
+    chat_days = int(day_match.group(1)) if day_match else int(days)
+    chat_days = max(1, min(chat_days, 21))
+
+    # Infer interests from the words the user uses.
+    interest_map = {
+        "Nature": ["nature", "mountain", "hill", "waterfall", "lake", "beach", "scenery", "greenery"],
+        "Adventure": ["adventure", "trek", "trekking", "rafting", "camping", "hiking"],
+        "Snow": ["snow", "snowfall", "winter"],
+        "Food": ["food", "eat", "cuisine", "street food", "restaurant"],
+        "Shopping": ["shopping", "market", "buy", "bazaar"],
+        "Historical": ["history", "historical", "fort", "palace", "monument", "heritage"],
+        "Spiritual": ["temple", "spiritual", "pilgrimage", "religious"],
+        "Culture": ["culture", "cultural", "festival", "tradition"],
+        "Architecture": ["architecture", "building"],
+        "Wildlife": ["wildlife", "safari", "animals", "tiger"]
+    }
+    wanted = [tag for tag, words in interest_map.items() if any(w in q for w in words)]
+
+    # Destination-specific question: give details from the bundled dataset.
+    mentioned = next((d for d in DESTINATIONS if d["place"].lower() in q), None)
+    if mentioned:
+        daily = mentioned["stay"] + mentioned["food"] + mentioned["local"] + mentioned["activities"]
+        return (
+            f"**{mentioned['place']}, {mentioned['state']} ({mentioned['region']} India)**\n\n"
+            f"{', '.join(mentioned['highlights'])} are listed highlights. "
+            f"Interests: {', '.join(mentioned['tags'])}. General season guide: {mentioned['months']}.\n\n"
+            f"Illustrative destination spending is about **₹{daily:,} per person per day** "
+            f"for stay, food, local travel and activities, before intercity transport. "
+            "This is a planning estimate, not a live quote. Check current prices, access, permits and weather."
+        )
+
+    # Find matching destinations from the local database using chat constraints.
+    selected_budget = chat_budget if chat_budget else int(budget)
+    selected_travellers = int(travellers)
+    fare_pp = int(transport_pp)
+    candidates = []
+    for d in DESTINATIONS:
+        if d["region"] not in region_filter:
+            continue
+        if wanted and not set(wanted).intersection(d["tags"]):
+            continue
+        comfort_multiplier = 1.35 if style == "Comfortable" else 1.0
+        stay_cost = round(d["stay"] * chat_days * comfort_multiplier)
+        food_cost = round(d["food"] * chat_days * (1.15 if style == "Comfortable" else 1.0))
+        local_cost = round(d["local"] * chat_days)
+        activity_cost = round(d["activities"] * chat_days)
+        destination_cost = (stay_cost + food_cost + local_cost + activity_cost) * selected_travellers
+        travel_cost = fare_pp * selected_travellers
+        total = destination_cost + travel_cost
+        if total <= selected_budget:
+            score = len(set(wanted).intersection(d["tags"])) * 4
+            candidates.append((score, total, d, stay_cost, food_cost, local_cost, activity_cost))
+    candidates.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+
+    if candidates:
+        lines = [
+            f"Based on **₹{selected_budget:,} total**, **{selected_travellers} traveller(s)** and **{chat_days} day(s)**, here are options from the TrekVerse destination database:",
+            ""
+        ]
+        for score, total, d, stay_cost, food_cost, local_cost, activity_cost in candidates[:5]:
+            lines.append(
+                f"- **{d['place']}, {d['state']}** — estimated group total **₹{total:,}** "
+                f"(stay ₹{stay_cost*selected_travellers:,}, food ₹{food_cost*selected_travellers:,}, "
+                f"local travel ₹{local_cost*selected_travellers:,}, activities ₹{activity_cost*selected_travellers:,}, "
+                f"intercity fare ₹{fare_pp*selected_travellers:,}). "
+                f"Highlights: {', '.join(d['highlights'][:2])}."
+            )
+        if fare_pp == 0:
+            lines += ["", "**Transport note:** You have not entered an intercity return fare, so these totals exclude travel from your starting city to the destination. Add a checked fare in the sidebar for a more complete estimate."]
+        lines += ["", "These are illustrative estimates, not live hotel, train or bus prices. Compare actual fares and accommodation before booking."]
+        return "\n".join(lines)
+
+    if wanted:
+        wanted_text = ", ".join(wanted)
     else:
-        st.info("I can answer simple questions using the destination database. The itinerary builder is rule-based; it is not a generative AI chatbot.")
+        wanted_text = "your selected interests"
+    return (
+        f"I couldn't find a destination in the current database that fits **₹{selected_budget:,}** "
+        f"for **{chat_days} day(s)** and {wanted_text}. Try increasing the budget, reducing the trip length, "
+        "changing the region filter, or entering a lower checked intercity fare. "
+        "If you haven't entered a transport fare, remember that recommendations exclude the journey to the destination."
+    )
+
+if "trekverse_chat_history" not in st.session_state:
+    st.session_state.trekverse_chat_history = [
+        {"role": "assistant", "content": "Hello! I'm TrekVerse. Tell me your budget, starting city, number of days and the kind of trip you like. I can compare destinations using the built-in India travel database."}
+    ]
+
+for message in st.session_state.trekverse_chat_history:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+user_prompt = st.chat_input("Ask TrekVerse about a trip, budget or destination...")
+if user_prompt:
+    st.session_state.trekverse_chat_history.append({"role": "user", "content": user_prompt})
+    with st.chat_message("user"):
+        st.markdown(user_prompt)
+    answer = trekverse_reply(user_prompt)
+    st.session_state.trekverse_chat_history.append({"role": "assistant", "content": answer})
+    with st.chat_message("assistant"):
+        st.markdown(answer)
+
+if st.button("Clear chat history"):
+    st.session_state.trekverse_chat_history = []
+    st.rerun()
 
 with st.expander("How estimates work and what is not included"):
     st.write("Per-person destination estimate = (daily accommodation + daily food + daily local travel + daily activities) × number of days. Group costs multiply by travellers and add the round-trip transport fare you entered per person.")
