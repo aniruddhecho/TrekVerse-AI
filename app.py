@@ -101,9 +101,9 @@ div.stButton > button {background:#12a9ce;color:white;border:0;border-radius:9px
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="hero">', unsafe_allow_html=True)
-st.title("🧭 TrekVerse — Explore India on Your Budget")
-st.write("Compare destinations across India, estimate trip costs and build a simple day-wise plan.")
-st.caption("Free starter version • No paid AI API • 60+ destinations • No live fares or hotel quotes")
+st.title("🧭 TrekVerse V3 — India Travel & Itinerary Assistant")
+st.write("Find destinations across India, compare estimated costs and generate a downloadable day-wise travel itinerary.")
+st.caption("Free V3 • 60+ destinations • Day-wise itinerary builder • No paid API key • No live fares or hotel quotes")
 st.markdown('</div>', unsafe_allow_html=True)
 
 with st.sidebar:
@@ -129,6 +129,7 @@ c.metric("Days", int(days))
 d.metric("Budget per person", f"₹{per_person_budget:,.0f}")
 
 st.markdown('<div class="note">Transport is not guessed from your starting city. Enter a round-trip fare above (per person) after checking a train, bus or flight. Destination costs below are broad planning estimates, not current quotes.</div>', unsafe_allow_html=True)
+
 
 matches = []
 for p in DESTINATIONS:
@@ -156,12 +157,12 @@ for p in DESTINATIONS:
 matches.sort(key=lambda x:(x["score"],-x["total_group"]), reverse=True)
 st.subheader(f"Destinations within budget ({len(matches)} matches)")
 if not matches:
-    st.warning("No listed destination fits the current inputs. Try more budget, fewer days, fewer travellers, or set a lower checked transport estimate.")
+    st.warning("No listed destination fits the current inputs. Try increasing the budget, reducing days or travellers, or entering a lower checked transport fare.")
 else:
     for p in matches[:12]:
         with st.expander(f"📍 {p['place']}, {p['state']} — estimated group total ₹{p['total_group']:,}"):
-            st.write(f"**Region:** {p['region']}  |  **Best season (general guide):** {p['months']}")
-            st.write(f"**Why visit:** {', '.join(p['highlights'])}")
+            st.write(f"**Region:** {p['region']}  |  **General best season:** {p['months']}")
+            st.write(f"**Highlights:** {', '.join(p['highlights'])}")
             st.write(f"**Interests:** {', '.join(p['tags'])}")
             x1,x2,x3,x4,x5 = st.columns(5)
             x1.metric("Stay",f"₹{p['stay_group']:,}")
@@ -170,13 +171,7 @@ else:
             x4.metric("Activities",f"₹{p['activities_group']:,}")
             x5.metric("Intercity travel",f"₹{p['transport_group']:,}")
             st.success(f"Estimated remaining budget: ₹{p['remaining']:,}")
-            st.markdown("**Simple day-wise idea**")
-            highlights = p["highlights"]
-            for day in range(1, int(days)+1):
-                first = highlights[(day-1) % len(highlights)]
-                second = highlights[day % len(highlights)]
-                st.write(f"Day {day}: Explore {first}; then visit {second}. Keep time for meals, rest and local transport.")
-            st.caption("Check opening days, permits, weather, road conditions and current prices before booking.")
+            st.caption("See the detailed itinerary builder below to create a schedule for your chosen destination.")
 
 if matches:
     export = pd.DataFrame([{
@@ -188,6 +183,91 @@ if matches:
     } for p in matches])
     st.download_button("⬇️ Download all matching destinations (CSV)", export.to_csv(index=False).encode("utf-8"),
                        file_name="trekverse_india_recommendations.csv", mime="text/csv")
+
+st.divider()
+st.header("🗓️ V3 — Build your day-wise travel itinerary")
+st.write("Choose one destination from the places that fit your budget. TrekVerse will arrange its listed highlights into a practical sample schedule.")
+
+if matches:
+    place_names = [f"{p['place']}, {p['state']}" for p in matches]
+    selected_label = st.selectbox("Choose your destination for the itinerary", place_names)
+    selected = matches[place_names.index(selected_label)]
+
+    cuisine_ideas = {
+        "Punjab": "Punjabi thali, chole kulche or dal with roti",
+        "Himachal Pradesh": "Local dham-style meal, siddu where available, or simple thali",
+        "Uttarakhand": "Pahadi thali, mandua roti or local seasonal dishes",
+        "Rajasthan": "Dal baati churma, gatte ki sabzi or a simple Rajasthani thali",
+        "Madhya Pradesh": "Poha-jalebi, dal bafla or a local thali",
+        "Uttar Pradesh": "Regional thali, chaat or local vegetarian/non-vegetarian specialties",
+        "Maharashtra": "Misal pav, poha or a Maharashtrian thali",
+        "Goa": "Goan fish curry/rice or local vegetarian thali",
+        "Gujarat": "Gujarati thali, khichdi-kadhi or dhokla",
+        "Telangana": "Hyderabadi biryani or a local vegetarian thali",
+        "Karnataka": "South Indian meals, dosa or a Karnataka-style thali",
+        "Tamil Nadu": "Idli, dosa, meals on a banana leaf or local tiffin",
+        "Kerala": "Kerala meals, appam with stew or puttu and kadala",
+        "Puducherry": "South Indian meals and French-influenced bakery options",
+        "West Bengal": "Bengali thali, fish curry where preferred, or sweets",
+        "Sikkim": "Momos, thukpa or a local rice-and-vegetable meal",
+        "Meghalaya": "Local Khasi/Garo dishes or simple rice-based meals",
+        "Assam": "Assamese thali, rice with seasonal vegetables or fish",
+        "Arunachal Pradesh": "Local rice-based dishes and momos where available",
+        "Odisha": "Odia thali, dalma or local snacks",
+        "Jharkhand": "Local thali, litti-chokha or seasonal tribal cuisine",
+        "Chhattisgarh": "Chhattisgarhi thali and local rice-based dishes",
+        "Andhra Pradesh": "Andhra meals, pesarattu or local thali",
+        "Andaman and Nicobar Islands": "Seafood where preferred or a local Indian thali",
+        "Jammu and Kashmir": "Kashmiri wazwan-style dishes or a simple local meal",
+        "Ladakh": "Thukpa, skyu or momos"
+    }
+    cuisine = cuisine_ideas.get(selected["state"], "A local thali or regional specialty from a clean, well-reviewed eatery")
+    highlights = selected["highlights"]
+    daily_food_group = round(selected["food"] * (1.15 if style == "Comfortable" else 1.0) * travellers)
+    daily_stay_group = round(selected["stay"] * (1.35 if style == "Comfortable" else 1.0) * travellers)
+    daily_local_group = round(selected["local"] * travellers)
+    daily_activity_group = round(selected["activities"] * travellers)
+
+    st.subheader(f"Your {days}-day plan for {selected['place']}")
+    st.caption(f"Starting point: {origin} • Month: {month} • Travellers: {travellers} • Style: {style}")
+    st.info(f"Food ideas to look for: {cuisine}. These are regional suggestions, not recommendations for a specific restaurant.")
+
+    itinerary_rows = []
+    for day_no in range(1, int(days)+1):
+        first = highlights[(day_no*2-2) % len(highlights)]
+        second = highlights[(day_no*2-1) % len(highlights)]
+        third = highlights[(day_no*2) % len(highlights)]
+        with st.expander(f"Day {day_no} — {first}", expanded=(day_no == 1)):
+            st.markdown(f"**8:00–9:00 AM | Breakfast**  \nTry a local breakfast or a simple meal near your stay. Keep breakfast spending within your daily food budget.")
+            st.markdown(f"**9:00 AM–12:00 PM | Morning visit**  \nExplore **{first}**. Check opening hours, entry fees and travel time before leaving.")
+            st.markdown(f"**12:00–2:00 PM | Lunch and rest**  \nLook for: {cuisine}. Keep some time for a relaxed lunch.")
+            st.markdown(f"**2:00–5:00 PM | Afternoon visit**  \nVisit **{second}**. Use local transport and avoid trying to cover too many distant places in one day.")
+            st.markdown(f"**5:00–7:00 PM | Evening option**  \nIf time and conditions allow, explore **{third}** or enjoy a nearby market/viewpoint.")
+            st.markdown("**7:00 PM onward | Dinner and rest**  \nChoose a clean, well-reviewed eatery and return to your accommodation.")
+            st.caption(f"Indicative group daily allowance: stay ₹{daily_stay_group:,} • food ₹{daily_food_group:,} • local travel ₹{daily_local_group:,} • activities ₹{daily_activity_group:,}.")
+        itinerary_rows.append({
+            "Day": day_no, "Morning": first, "Afternoon": second, "Evening option": third,
+            "Breakfast": "Local breakfast near accommodation", "Lunch/Dinner idea": cuisine,
+            "Group daily stay estimate (INR)": daily_stay_group,
+            "Group daily food estimate (INR)": daily_food_group,
+            "Group daily local travel estimate (INR)": daily_local_group,
+            "Group daily activity estimate (INR)": daily_activity_group
+        })
+
+    st.subheader("Estimated trip budget")
+    b1,b2,b3,b4,b5 = st.columns(5)
+    b1.metric("Accommodation", f"₹{selected['stay_group']:,}")
+    b2.metric("Food", f"₹{selected['food_group']:,}")
+    b3.metric("Local travel", f"₹{selected['local_group']:,}")
+    b4.metric("Activities", f"₹{selected['activities_group']:,}")
+    b5.metric("Intercity travel", f"₹{selected['transport_group']:,}")
+    st.success(f"Estimated group total: ₹{selected['total_group']:,}  |  Budget left: ₹{selected['remaining']:,}")
+    st.download_button("📥 Download this day-wise itinerary (CSV)",
+                       pd.DataFrame(itinerary_rows).to_csv(index=False).encode("utf-8"),
+                       file_name=f"trekverse_{selected['place'].lower().replace(' ','_')}_itinerary.csv",
+                       mime="text/csv")
+else:
+    st.info("First adjust your budget, days, travellers and filters until at least one destination appears. Then you can generate its itinerary.")
 
 st.divider()
 st.subheader("Ask TrekVerse")
@@ -204,9 +284,9 @@ if question:
         names = [d["place"] for d in DESTINATIONS if "Nature" in d["tags"] and d["region"] in ["West","South","Islands"]]
         st.info("Coastal/island options to explore include: " + ", ".join(names[:18]) + ".")
     else:
-        st.info("I can answer simple questions using the destination database. This is a rule-based assistant, not a generative AI chatbot yet.")
+        st.info("I can answer simple questions using the destination database. The itinerary builder is rule-based; it is not a generative AI chatbot.")
 
 with st.expander("How estimates work and what is not included"):
-    st.write("Per-person destination estimate = (daily accommodation + daily food + daily local travel + daily activities) × number of days. The group total multiplies this by travellers and adds the round-trip transport amount you entered per person.")
-    st.warning("These are broad illustrative estimates, not verified live prices. Actual costs vary by date, city area, season, group size, accommodation type and transport mode. Some places require permits, guides, ferries or special transport that may not be included. For remote destinations, check local advisories and access conditions.")
-st.caption("TrekVerse India Edition • Python + Streamlit + Pandas • Free starter project")
+    st.write("Per-person destination estimate = (daily accommodation + daily food + daily local travel + daily activities) × number of days. Group costs multiply by travellers and add the round-trip transport fare you entered per person.")
+    st.warning("These are broad illustrative estimates, not verified live prices. The itinerary rotates the destination highlights to create a sample schedule; it does not know live opening hours, route distances, traffic, restaurant availability or weather. Check current prices, permits, opening days and local advisories before booking.")
+st.caption("TrekVerse India Edition V3 • Python + Streamlit + Pandas • Free starter project")
