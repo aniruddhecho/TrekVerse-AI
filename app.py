@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
 import re
+import requests
+from urllib.parse import quote_plus
+import folium
+from streamlit_folium import st_folium
 from calendar import month_name
 
 st.set_page_config(page_title="TrekVerse | India Budget Travel", page_icon="🧭", layout="wide")
@@ -90,6 +94,68 @@ DESTINATIONS = [d for d in DESTINATIONS if isinstance(d, dict)]
 MONTHS = list(month_name)[1:]
 INTERESTS = sorted({tag for d in DESTINATIONS for tag in d["tags"]})
 
+# Approximate map coordinates for destination markers. Confirm exact pins before navigation.
+COORDS = {
+    "Amritsar":(31.6340,74.8723),"Chandigarh":(30.7333,76.7794),"Shimla":(31.1048,77.1734),
+    "Manali":(32.2432,77.1892),"Dharamshala and McLeod Ganj":(32.2190,76.3234),"Kasol":(32.0100,77.3150),
+    "Rishikesh":(30.0869,78.2676),"Haridwar":(29.9457,78.1642),"Nainital":(29.3803,79.4636),
+    "Jaipur":(26.9124,75.7873),"Udaipur":(24.5854,73.7125),"Jodhpur":(26.2389,73.0243),
+    "Jaisalmer":(26.9157,70.9083),"Pushkar":(26.4899,74.5511),"Ujjain":(23.1793,75.7849),
+    "Mandu":(22.3333,75.4000),"Maheshwar":(22.1759,75.5870),"Bhopal":(23.2599,77.4126),
+    "Pachmarhi":(22.4674,78.4330),"Khajuraho":(24.8318,79.9199),"Orchha":(25.3519,78.6407),
+    "Varanasi":(25.3176,82.9739),"Agra":(27.1767,78.0081),"Lucknow":(26.8467,80.9462),
+    "Mumbai":(19.0760,72.8777),"Pune":(18.5204,73.8567),"Nashik":(19.9975,73.7898),
+    "Mahabaleshwar":(17.9307,73.6477),"Goa":(15.2993,74.1240),"Ahmedabad":(23.0225,72.5714),
+    "Rann of Kutch":(23.7337,69.8597),"Diu":(20.7141,70.9874),"Hyderabad":(17.3850,78.4867),
+    "Hampi":(15.3350,76.4600),"Bengaluru":(12.9716,77.5946),"Mysuru":(12.2958,76.6394),
+    "Coorg":(12.3375,75.8069),"Gokarna":(14.5479,74.3188),"Chennai":(13.0827,80.2707),
+    "Ooty":(11.4064,76.6932),"Kodaikanal":(10.2381,77.4892),"Madurai":(9.9252,78.1198),
+    "Rameswaram":(9.2876,79.3129),"Kochi":(9.9312,76.2673),"Munnar":(10.0889,77.0595),
+    "Alappuzha":(9.4981,76.3388),"Varkala":(8.7379,76.7163),"Puducherry":(11.9416,79.8083),
+    "Kolkata":(22.5726,88.3639),"Darjeeling":(27.0410,88.2663),"Gangtok":(27.3389,88.6065),
+    "Shillong":(25.5788,91.8933),"Cherrapunji (Sohra)":(25.2702,91.7323),"Kaziranga":(26.5775,93.1711),
+    "Guwahati":(26.1445,91.7362),"Tawang":(27.5860,91.8594),"Puri":(19.8135,85.8312),
+    "Bhubaneswar":(20.2961,85.8245),"Ranchi":(23.3441,85.3096),"Raipur":(21.2514,81.6296),
+    "Visakhapatnam":(17.6868,83.2185),"Araku Valley":(18.3273,82.8775),
+    "Port Blair (Sri Vijaya Puram)":(11.6234,92.7265),"Srinagar":(34.0837,74.7973),
+    "Leh":(34.1526,77.5771),"Kargil":(34.5539,76.1349)
+}
+
+def fetch_weather(place):
+    """Fetch a 7-day forecast from the free Open-Meteo API; no API key required."""
+    coords = COORDS.get(place)
+    if not coords:
+        return None, "No map/weather coordinates are available for this destination yet."
+    lat, lon = coords
+    endpoint = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat, "longitude": lon,
+        "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m",
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+        "timezone": "auto", "forecast_days": 7
+    }
+    try:
+        response = requests.get(endpoint, params=params, timeout=12)
+        response.raise_for_status()
+        return response.json(), None
+    except requests.RequestException:
+        return None, "Weather could not be loaded. Check the internet connection and try again."
+
+def weather_description(code):
+    descriptions = {
+        0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+        45:"Fog",48:"Depositing rime fog",51:"Light drizzle",53:"Drizzle",
+        55:"Dense drizzle",61:"Slight rain",63:"Rain",65:"Heavy rain",
+        71:"Slight snow",73:"Snow",75:"Heavy snow",80:"Rain showers",
+        81:"Rain showers",82:"Violent rain showers",95:"Thunderstorm",
+        96:"Thunderstorm with hail",99:"Thunderstorm with heavy hail"
+    }
+    return descriptions.get(code, "Variable conditions")
+
+def google_maps_search(place):
+    return "https://www.google.com/maps/search/?api=1&query=" + quote_plus(place + ", India")
+
+
 st.markdown("""
 <style>
 .stApp {background: linear-gradient(135deg,#071b2b 0%,#102f3d 55%,#173b42 100%); color:#f4f7f8;}
@@ -102,9 +168,9 @@ div.stButton > button {background:#12a9ce;color:white;border:0;border-radius:9px
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="hero">', unsafe_allow_html=True)
-st.title("🧭 TrekVerse V4 — India AI-Style Travel Assistant")
+st.title("🧭 TrekVerse V5 — Complete India Travel Companion")
 st.write("Find destinations across India, compare estimated costs and generate a downloadable day-wise travel itinerary.")
-st.caption("Free V4 • India-wide destination finder • Day-wise itinerary builder • Chat-style travel assistant • No paid API key")
+st.caption("Free V5 • India-wide planner • Chat assistant • Itineraries • Interactive map • Live weather • Travel shortcuts • Checklist")
 st.markdown('</div>', unsafe_allow_html=True)
 
 with st.sidebar:
@@ -271,7 +337,103 @@ else:
     st.info("First adjust your budget, days, travellers and filters until at least one destination appears. Then you can generate its itinerary.")
 
 st.divider()
-st.header("🤖 V4 — Chat with TrekVerse")
+st.header("🗺️ V5 — Interactive India map, live weather and travel tools")
+
+map_col, weather_col = st.columns([1.35, 1])
+with map_col:
+    st.subheader("Explore destinations on the map")
+    map_destinations = [d for d in DESTINATIONS if d["region"] in region_filter and d["place"] in COORDS]
+    if map_destinations:
+        india_map = folium.Map(location=[22.5, 79.0], zoom_start=4, tiles="OpenStreetMap")
+        for d in map_destinations:
+            lat, lon = COORDS[d["place"]]
+            popup_html = f"<b>{d['place']}</b><br>{d['state']}<br>Typical budget: ₹{d['stay']+d['food']+d['local']+d['activities']:,}/person/day"
+            folium.Marker([lat,lon], tooltip=d["place"], popup=folium.Popup(popup_html, max_width=260)).add_to(india_map)
+        st_folium(india_map, width=None, height=440, returned_objects=[])
+        st.caption("Map pins are approximate destination/city locations. Open the map link below for navigation and verify the exact attraction pin.")
+    else:
+        st.info("Choose at least one region in the sidebar to display destinations.")
+
+with weather_col:
+    st.subheader("7-day weather forecast")
+    weather_names = [d["place"] for d in DESTINATIONS if d["place"] in COORDS]
+    weather_place = st.selectbox("Choose a destination", weather_names, key="weather_destination")
+    if st.button("Get current weather and forecast"):
+        with st.spinner("Fetching weather from Open-Meteo..."):
+            weather_data, weather_error = fetch_weather(weather_place)
+        if weather_error:
+            st.warning(weather_error)
+        else:
+            current = weather_data.get("current", {})
+            w1,w2 = st.columns(2)
+            w1.metric("Temperature", f"{current.get('temperature_2m','—')} °C")
+            w2.metric("Feels like", f"{current.get('apparent_temperature','—')} °C")
+            w3,w4 = st.columns(2)
+            w3.metric("Humidity", f"{current.get('relative_humidity_2m','—')}%")
+            w4.metric("Wind", f"{current.get('wind_speed_10m','—')} km/h")
+            st.write(f"**Conditions:** {weather_description(current.get('weather_code'))}")
+            daily = weather_data.get("daily", {})
+            forecast_rows = []
+            for i, date in enumerate(daily.get("time", [])):
+                forecast_rows.append({
+                    "Date": date,
+                    "Conditions": weather_description(daily.get("weather_code", [None]*7)[i]),
+                    "Min °C": daily.get("temperature_2m_min", [None]*7)[i],
+                    "Max °C": daily.get("temperature_2m_max", [None]*7)[i],
+                    "Rain chance %": daily.get("precipitation_probability_max", [None]*7)[i]
+                })
+            if forecast_rows:
+                st.dataframe(pd.DataFrame(forecast_rows), use_container_width=True, hide_index=True)
+            st.caption("Forecast is from Open-Meteo. Weather changes; recheck shortly before departure.")
+    st.link_button("Open destination in Google Maps", google_maps_search(weather_place))
+
+st.divider()
+st.header("🔎 Travel research and booking shortcuts")
+st.write("These links help you check current details on external services. TrekVerse does not book tickets or verify live inventory.")
+link_cols = st.columns(3)
+with link_cols[0]:
+    st.markdown("**Transport**")
+    st.link_button("Search train options (IRCTC)", "https://www.irctc.co.in/")
+    st.link_button("Search bus options (redBus)", "https://www.redbus.in/")
+    st.link_button("Search flights (Google Flights)", "https://www.google.com/travel/flights")
+with link_cols[1]:
+    st.markdown("**Stays**")
+    st.link_button("Search hotels (Google)", "https://www.google.com/travel/hotels")
+    st.link_button("Search stays (Booking.com)", "https://www.booking.com/")
+    st.link_button("Search homestays (Airbnb)", "https://www.airbnb.co.in/")
+with link_cols[2]:
+    st.markdown("**Destination research**")
+    st.link_button("Search destination on Maps", google_maps_search(weather_place if "weather_place" in locals() else "India"))
+    st.link_button("Search destination guides", "https://www.incredibleindia.gov.in/")
+    st.link_button("Check India travel advisories", "https://www.mea.gov.in/")
+
+st.divider()
+st.header("🎒 Smart trip checklist")
+checklist_items = [
+    "Confirm return train/bus/flight tickets",
+    "Confirm accommodation and cancellation policy",
+    "Check forecast and local weather warnings",
+    "Check attraction opening hours and entry fees",
+    "Check permits and local access rules, if applicable",
+    "Carry valid ID and required documents",
+    "Save offline maps and emergency contacts",
+    "Keep a separate emergency budget",
+    "Share itinerary with a trusted person",
+    "Pack medicines, chargers and suitable clothing"
+]
+checked = []
+check_cols = st.columns(2)
+for idx, item in enumerate(checklist_items):
+    with check_cols[idx % 2]:
+        if st.checkbox(item, key=f"trip_check_{idx}"):
+            checked.append(item)
+st.progress(len(checked)/len(checklist_items), text=f"{len(checked)} of {len(checklist_items)} preparation tasks completed")
+if checked:
+    st.download_button("Download completed checklist", pd.DataFrame({"Completed task":checked}).to_csv(index=False).encode("utf-8"),
+                       file_name="trekverse_trip_checklist.csv", mime="text/csv")
+
+st.divider()
+st.header("🤖 V5 — Chat with TrekVerse")
 st.write("Ask in everyday language. Try: “I have ₹5,000, want nature, and can travel for 2 days from Indore.”")
 
 def trekverse_reply(user_text):
