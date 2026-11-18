@@ -25,7 +25,103 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+st.markdown("""
+<style>
 
+/* Main wallpaper background */
+.stApp {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(8, 15, 40, 0.72),
+            rgba(40, 15, 75, 0.55)
+        ),
+        url("https://images.unsplash.com/photo-1464822759023-fed622ff2c3b");
+
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: rgba(10, 18, 45, 0.92);
+}
+
+/* Main headings */
+h1, h2, h3 {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
+/* Normal text */
+p, label, span {
+    color: #f1f5ff;
+}
+
+/* Glass effect containers */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: rgba(15, 25, 55, 0.72);
+    border: 1px solid rgba(120, 150, 255, 0.35);
+    border-radius: 18px;
+    backdrop-filter: blur(12px);
+}
+
+/* Buttons */
+.stButton > button,
+.stDownloadButton > button {
+    background: linear-gradient(
+        90deg,
+        #6366f1,
+        #a855f7,
+        #ec4899
+    );
+
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+/* Button hover */
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 18px #a855f7;
+    color: white;
+}
+
+/* Input fields */
+.stTextInput input,
+.stNumberInput input,
+.stSelectbox div[data-baseweb="select"] {
+    background-color: rgba(30, 40, 70, 0.85);
+    color: white;
+    border-radius: 10px;
+}
+
+/* Metrics */
+div[data-testid="stMetric"] {
+    background: rgba(99, 102, 241, 0.18);
+    padding: 15px;
+    border-radius: 14px;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+/* Tabs */
+button[data-baseweb="tab"] {
+    color: white;
+    font-weight: bold;
+}
+
+/* Links */
+a {
+    color: #67e8f9 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 DESTINATIONS = [
     {"place":"Indore","state":"Madhya Pradesh","region":"Central India","type":"Food & Culture","months":"October–March","daily":1800,"stay":1100,"lat":22.7196,"lon":75.8577,"tags":["food","culture","city","heritage"],"about":"A lively city known for street food, markets and nearby heritage sites."},
     {"place":"Ujjain","state":"Madhya Pradesh","region":"Central India","type":"Spiritual","months":"October–March","daily":1600,"stay":900,"lat":23.1765,"lon":75.7885,"tags":["spiritual","culture","heritage"],"about":"An important pilgrimage city on the Shipra River."},
