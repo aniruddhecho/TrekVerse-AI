@@ -1,309 +1,455 @@
-import streamlit as st
+import math
+import io
+import json
+import random
+from datetime import date, timedelta
+
 import pandas as pd
 import requests
-import re, io, math
-from urllib.parse import quote_plus
+import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
 
-st.set_page_config(page_title="TrekVerse V6 | India Travel OS", page_icon="🧭", layout="wide")
-DESTINATIONS = [{'place': 'Amritsar', 'state': 'Punjab', 'region': 'North', 'stay': 700, 'food': 500, 'local': 250, 'activities': 200, 'tags': ['Historical', 'Food', 'Culture'], 'months': 'October–March', 'highlights': ['Golden Temple', 'Jallianwala Bagh', 'Wagah border ceremony']}, {'place': 'Chandigarh', 'state': 'Chandigarh', 'region': 'North', 'stay': 900, 'food': 600, 'local': 350, 'activities': 250, 'tags': ['Nature', 'Architecture', 'Food'], 'months': 'October–March', 'highlights': ['Rock Garden', 'Sukhna Lake', 'Capitol Complex']}, {'place': 'Shimla', 'state': 'Himachal Pradesh', 'region': 'North', 'stay': 1000, 'food': 650, 'local': 450, 'activities': 300, 'tags': ['Nature', 'Adventure', 'Snow'], 'months': 'March–June; December–February for snow', 'highlights': ['The Ridge', 'Mall Road', 'Kufri']}, {'place': 'Manali', 'state': 'Himachal Pradesh', 'region': 'North', 'stay': 1100, 'food': 650, 'local': 500, 'activities': 450, 'tags': ['Nature', 'Adventure', 'Snow'], 'months': 'March–June; December–February for snow', 'highlights': ['Old Manali', 'Hadimba Temple', 'Solang Valley']}, {'place': 'Dharamshala and McLeod Ganj', 'state': 'Himachal Pradesh', 'region': 'North', 'stay': 900, 'food': 600, 'local': 350, 'activities': 250, 'tags': ['Nature', 'Adventure', 'Culture'], 'months': 'March–June; September–November', 'highlights': ['Bhagsu Waterfall', 'Dalai Lama Temple', 'Triund trail']}, {'place': 'Kasol', 'state': 'Himachal Pradesh', 'region': 'North', 'stay': 800, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Nature', 'Adventure'], 'months': 'March–June; September–November', 'highlights': ['Parvati River', 'Chalal walk', 'Tosh village']}, {'place': 'Rishikesh', 'state': 'Uttarakhand', 'region': 'North', 'stay': 700, 'food': 500, 'local': 300, 'activities': 500, 'tags': ['Nature', 'Adventure', 'Spiritual'], 'months': 'September–April', 'highlights': ['Ganga aarti', 'Ram Jhula', 'River rafting (seasonal)']}, {'place': 'Haridwar', 'state': 'Uttarakhand', 'region': 'North', 'stay': 650, 'food': 450, 'local': 250, 'activities': 150, 'tags': ['Spiritual', 'Historical', 'Culture'], 'months': 'October–March', 'highlights': ['Har Ki Pauri', 'Mansa Devi Temple', 'Ganga aarti']}, {'place': 'Nainital', 'state': 'Uttarakhand', 'region': 'North', 'stay': 900, 'food': 550, 'local': 350, 'activities': 300, 'tags': ['Nature', 'Adventure'], 'months': 'March–June; September–November', 'highlights': ['Naini Lake', 'Snow View Point', 'Mall Road']}, {'place': 'Jaipur', 'state': 'Rajasthan', 'region': 'North', 'stay': 800, 'food': 550, 'local': 300, 'activities': 350, 'tags': ['Historical', 'Food', 'Shopping', 'Architecture'], 'months': 'October–March', 'highlights': ['Amber Fort', 'Hawa Mahal', 'City Palace']}, {'place': 'Udaipur', 'state': 'Rajasthan', 'region': 'North', 'stay': 1000, 'food': 650, 'local': 350, 'activities': 350, 'tags': ['Historical', 'Nature', 'Food', 'Culture'], 'months': 'October–March', 'highlights': ['Lake Pichola', 'City Palace', 'Bagore Ki Haveli']}, {'place': 'Jodhpur', 'state': 'Rajasthan', 'region': 'North', 'stay': 800, 'food': 550, 'local': 300, 'activities': 300, 'tags': ['Historical', 'Food', 'Shopping'], 'months': 'October–March', 'highlights': ['Mehrangarh Fort', 'Blue City lanes', 'Jaswant Thada']}, {'place': 'Jaisalmer', 'state': 'Rajasthan', 'region': 'North', 'stay': 900, 'food': 600, 'local': 350, 'activities': 600, 'tags': ['Historical', 'Adventure', 'Culture'], 'months': 'October–March', 'highlights': ['Jaisalmer Fort', 'Sam Sand Dunes', 'Patwon Ki Haveli']}, {'place': 'Pushkar', 'state': 'Rajasthan', 'region': 'North', 'stay': 700, 'food': 500, 'local': 250, 'activities': 200, 'tags': ['Spiritual', 'Historical', 'Shopping'], 'months': 'October–March', 'highlights': ['Pushkar Lake', 'Brahma Temple', 'Local bazaar']}, {'place': 'Ujjain', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 650, 'food': 450, 'local': 250, 'activities': 200, 'tags': ['Spiritual', 'Historical', 'Food'], 'months': 'October–March', 'highlights': ['Mahakaleshwar Temple', 'Ram Ghat', 'Kal Bhairav Temple']}, {'place': 'Mandu', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 700, 'food': 450, 'local': 300, 'activities': 250, 'tags': ['Nature', 'Historical', 'Architecture'], 'months': 'July–February', 'highlights': ['Jahaz Mahal', 'Hindola Mahal', 'Rani Roopmati Pavilion']}, {'place': 'Maheshwar', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 750, 'food': 500, 'local': 250, 'activities': 200, 'tags': ['Nature', 'Historical', 'Shopping', 'Culture'], 'months': 'October–March', 'highlights': ['Ahilya Fort', 'Narmada ghats', 'Maheshwari handloom']}, {'place': 'Bhopal', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 750, 'food': 500, 'local': 300, 'activities': 250, 'tags': ['Nature', 'Historical', 'Food'], 'months': 'October–March', 'highlights': ['Upper Lake', 'Tribal Museum', 'Sanchi day trip']}, {'place': 'Pachmarhi', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 1000, 'food': 550, 'local': 550, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'October–June', 'highlights': ['Bee Falls', 'Dhoopgarh', 'Pandav Caves']}, {'place': 'Khajuraho', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 800, 'food': 500, 'local': 250, 'activities': 350, 'tags': ['Historical', 'Architecture', 'Culture'], 'months': 'October–March', 'highlights': ['Western Group of Temples', 'Eastern temples', 'Raneh Falls']}, {'place': 'Orchha', 'state': 'Madhya Pradesh', 'region': 'Central', 'stay': 650, 'food': 450, 'local': 200, 'activities': 200, 'tags': ['Historical', 'Nature', 'Architecture'], 'months': 'October–March', 'highlights': ['Orchha Fort complex', 'Chaturbhuj Temple', 'Betwa River']}, {'place': 'Varanasi', 'state': 'Uttar Pradesh', 'region': 'Central', 'stay': 750, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Spiritual', 'Historical', 'Food', 'Culture'], 'months': 'October–March', 'highlights': ['Dashashwamedh Ghat', 'Kashi Vishwanath Temple', 'Sarnath']}, {'place': 'Agra', 'state': 'Uttar Pradesh', 'region': 'Central', 'stay': 800, 'food': 550, 'local': 300, 'activities': 450, 'tags': ['Historical', 'Architecture', 'Food'], 'months': 'October–March', 'highlights': ['Taj Mahal', 'Agra Fort', 'Fatehpur Sikri']}, {'place': 'Lucknow', 'state': 'Uttar Pradesh', 'region': 'Central', 'stay': 800, 'food': 650, 'local': 300, 'activities': 250, 'tags': ['Historical', 'Food', 'Architecture'], 'months': 'October–March', 'highlights': ['Bara Imambara', 'Rumi Darwaza', 'Awadhi food trail']}, {'place': 'Mumbai', 'state': 'Maharashtra', 'region': 'West', 'stay': 1300, 'food': 750, 'local': 450, 'activities': 350, 'tags': ['Food', 'Historical', 'Shopping', 'Nature'], 'months': 'November–February', 'highlights': ['Gateway of India', 'Marine Drive', 'Elephanta Caves']}, {'place': 'Pune', 'state': 'Maharashtra', 'region': 'West', 'stay': 900, 'food': 650, 'local': 350, 'activities': 250, 'tags': ['Historical', 'Food', 'Nature'], 'months': 'October–February', 'highlights': ['Shaniwar Wada', 'Aga Khan Palace', 'Sinhagad Fort']}, {'place': 'Nashik', 'state': 'Maharashtra', 'region': 'West', 'stay': 850, 'food': 550, 'local': 350, 'activities': 250, 'tags': ['Nature', 'Spiritual', 'Food'], 'months': 'October–March', 'highlights': ['Trimbakeshwar', 'Pandavleni Caves', 'Godavari ghats']}, {'place': 'Mahabaleshwar', 'state': 'Maharashtra', 'region': 'West', 'stay': 1100, 'food': 600, 'local': 450, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'October–June', 'highlights': ['Venna Lake', "Arthur's Seat", 'Mapro Garden']}, {'place': 'Goa', 'state': 'Goa', 'region': 'West', 'stay': 1200, 'food': 700, 'local': 500, 'activities': 450, 'tags': ['Nature', 'Food', 'Adventure', 'Shopping'], 'months': 'November–February', 'highlights': ['Beaches', 'Old Goa churches', 'Local markets']}, {'place': 'Ahmedabad', 'state': 'Gujarat', 'region': 'West', 'stay': 800, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Historical', 'Food', 'Shopping', 'Architecture'], 'months': 'November–February', 'highlights': ['Sabarmati Ashram', 'Adalaj Stepwell', 'Old city heritage walk']}, {'place': 'Rann of Kutch', 'state': 'Gujarat', 'region': 'West', 'stay': 1400, 'food': 650, 'local': 650, 'activities': 500, 'tags': ['Nature', 'Culture', 'Photography'], 'months': 'November–February', 'highlights': ['White Rann', 'Kala Dungar', 'Craft villages']}, {'place': 'Diu', 'state': 'Dadra and Nagar Haveli and Daman and Diu', 'region': 'West', 'stay': 900, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Nature', 'Historical', 'Food'], 'months': 'October–March', 'highlights': ['Diu Fort', 'Nagoa Beach', 'Naida Caves']}, {'place': 'Hyderabad', 'state': 'Telangana', 'region': 'South', 'stay': 900, 'food': 650, 'local': 350, 'activities': 350, 'tags': ['Historical', 'Food', 'Shopping', 'Architecture'], 'months': 'October–February', 'highlights': ['Charminar', 'Golconda Fort', 'Hussain Sagar']}, {'place': 'Hampi', 'state': 'Karnataka', 'region': 'South', 'stay': 800, 'food': 550, 'local': 350, 'activities': 300, 'tags': ['Historical', 'Nature', 'Adventure', 'Architecture'], 'months': 'October–February', 'highlights': ['Virupaksha Temple', 'Vittala Temple', 'Hampi bazaar']}, {'place': 'Bengaluru', 'state': 'Karnataka', 'region': 'South', 'stay': 1100, 'food': 750, 'local': 400, 'activities': 300, 'tags': ['Food', 'Nature', 'Shopping'], 'months': 'October–February', 'highlights': ['Lalbagh', 'Cubbon Park', 'Bengaluru food streets']}, {'place': 'Mysuru', 'state': 'Karnataka', 'region': 'South', 'stay': 850, 'food': 600, 'local': 300, 'activities': 300, 'tags': ['Historical', 'Culture', 'Food', 'Architecture'], 'months': 'October–March', 'highlights': ['Mysore Palace', 'Chamundi Hills', 'Devaraja Market']}, {'place': 'Coorg', 'state': 'Karnataka', 'region': 'South', 'stay': 1100, 'food': 650, 'local': 500, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'October–March', 'highlights': ['Abbey Falls', "Raja's Seat", 'Coffee estates']}, {'place': 'Gokarna', 'state': 'Karnataka', 'region': 'South', 'stay': 900, 'food': 550, 'local': 350, 'activities': 250, 'tags': ['Nature', 'Adventure'], 'months': 'October–March', 'highlights': ['Om Beach', 'Kudle Beach', 'Coastal trail']}, {'place': 'Chennai', 'state': 'Tamil Nadu', 'region': 'South', 'stay': 1000, 'food': 650, 'local': 400, 'activities': 300, 'tags': ['Food', 'Historical', 'Culture'], 'months': 'November–February', 'highlights': ['Marina Beach', 'Kapaleeshwarar Temple', 'Fort St. George']}, {'place': 'Ooty', 'state': 'Tamil Nadu', 'region': 'South', 'stay': 1100, 'food': 600, 'local': 450, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'October–June', 'highlights': ['Botanical Gardens', 'Ooty Lake', 'Nilgiri Mountain Railway']}, {'place': 'Kodaikanal', 'state': 'Tamil Nadu', 'region': 'South', 'stay': 1000, 'food': 600, 'local': 450, 'activities': 300, 'tags': ['Nature', 'Adventure'], 'months': 'October–June', 'highlights': ['Kodaikanal Lake', "Coaker's Walk", 'Pillar Rocks']}, {'place': 'Madurai', 'state': 'Tamil Nadu', 'region': 'South', 'stay': 750, 'food': 550, 'local': 250, 'activities': 250, 'tags': ['Spiritual', 'Historical', 'Food', 'Architecture'], 'months': 'October–March', 'highlights': ['Meenakshi Amman Temple', 'Thirumalai Nayakkar Palace', 'Local food streets']}, {'place': 'Rameswaram', 'state': 'Tamil Nadu', 'region': 'South', 'stay': 800, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Spiritual', 'Nature', 'Historical'], 'months': 'October–April', 'highlights': ['Ramanathaswamy Temple', 'Pamban Bridge', 'Dhanushkodi']}, {'place': 'Kochi', 'state': 'Kerala', 'region': 'South', 'stay': 1000, 'food': 650, 'local': 350, 'activities': 300, 'tags': ['Historical', 'Food', 'Culture', 'Nature'], 'months': 'October–March', 'highlights': ['Fort Kochi', 'Chinese fishing nets', 'Mattancherry Palace']}, {'place': 'Munnar', 'state': 'Kerala', 'region': 'South', 'stay': 1200, 'food': 650, 'local': 500, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'September–March', 'highlights': ['Tea gardens', 'Eravikulam National Park', 'Mattupetty Dam']}, {'place': 'Alappuzha', 'state': 'Kerala', 'region': 'South', 'stay': 1000, 'food': 650, 'local': 350, 'activities': 450, 'tags': ['Nature', 'Food'], 'months': 'November–February', 'highlights': ['Backwaters', 'Alappuzha Beach', 'Village canoe trip']}, {'place': 'Varkala', 'state': 'Kerala', 'region': 'South', 'stay': 1000, 'food': 650, 'local': 350, 'activities': 300, 'tags': ['Nature', 'Adventure', 'Food'], 'months': 'October–March', 'highlights': ['Varkala cliff', 'Papanasam Beach', 'Janardhana Swamy Temple']}, {'place': 'Puducherry', 'state': 'Puducherry', 'region': 'South', 'stay': 1000, 'food': 700, 'local': 350, 'activities': 300, 'tags': ['Nature', 'Food', 'Historical', 'Culture'], 'months': 'October–March', 'highlights': ['White Town', 'Promenade Beach', 'Auroville']}, {'place': 'Kolkata', 'state': 'West Bengal', 'region': 'East', 'stay': 850, 'food': 600, 'local': 300, 'activities': 300, 'tags': ['Historical', 'Food', 'Culture', 'Architecture'], 'months': 'October–February', 'highlights': ['Victoria Memorial', 'Howrah Bridge', 'College Street']}, {'place': 'Darjeeling', 'state': 'West Bengal', 'region': 'East', 'stay': 1100, 'food': 650, 'local': 450, 'activities': 350, 'tags': ['Nature', 'Adventure'], 'months': 'March–May; October–November', 'highlights': ['Tiger Hill', 'Tea gardens', 'Darjeeling Himalayan Railway']}, {'place': 'Gangtok', 'state': 'Sikkim', 'region': 'East', 'stay': 1100, 'food': 650, 'local': 450, 'activities': 350, 'tags': ['Nature', 'Adventure', 'Culture'], 'months': 'March–June; September–November', 'highlights': ['MG Marg', 'Tsomgo Lake', 'Rumtek Monastery']}, {'place': 'Shillong', 'state': 'Meghalaya', 'region': 'East', 'stay': 1000, 'food': 600, 'local': 450, 'activities': 350, 'tags': ['Nature', 'Adventure', 'Food'], 'months': 'October–April', 'highlights': ['Umiam Lake', 'Elephant Falls', 'Laitlum Canyon']}, {'place': 'Cherrapunji (Sohra)', 'state': 'Meghalaya', 'region': 'East', 'stay': 1000, 'food': 600, 'local': 550, 'activities': 400, 'tags': ['Nature', 'Adventure'], 'months': 'October–May', 'highlights': ['Nohkalikai Falls', 'Mawsmai Cave', 'Living root bridges']}, {'place': 'Kaziranga', 'state': 'Assam', 'region': 'East', 'stay': 1200, 'food': 650, 'local': 600, 'activities': 900, 'tags': ['Nature', 'Adventure', 'Wildlife'], 'months': 'November–April', 'highlights': ['Kaziranga safari', 'Orchid park', 'Brahmaputra river']}, {'place': 'Guwahati', 'state': 'Assam', 'region': 'East', 'stay': 850, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Spiritual', 'Nature', 'Food'], 'months': 'October–April', 'highlights': ['Kamakhya Temple', 'Brahmaputra riverfront', 'Umananda Island']}, {'place': 'Tawang', 'state': 'Arunachal Pradesh', 'region': 'East', 'stay': 1300, 'food': 650, 'local': 700, 'activities': 350, 'tags': ['Nature', 'Adventure', 'Snow', 'Culture'], 'months': 'April–October; winter conditions can be severe', 'highlights': ['Tawang Monastery', 'Sela Pass', 'Madhuri Lake']}, {'place': 'Puri', 'state': 'Odisha', 'region': 'East', 'stay': 800, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Spiritual', 'Nature', 'Food'], 'months': 'October–February', 'highlights': ['Jagannath Temple', 'Puri Beach', 'Konark Sun Temple']}, {'place': 'Bhubaneswar', 'state': 'Odisha', 'region': 'East', 'stay': 800, 'food': 550, 'local': 300, 'activities': 250, 'tags': ['Historical', 'Architecture', 'Food'], 'months': 'October–February', 'highlights': ['Lingaraj Temple', 'Udayagiri and Khandagiri Caves', 'Dhauli']}, {'place': 'Ranchi', 'state': 'Jharkhand', 'region': 'East', 'stay': 750, 'food': 500, 'local': 350, 'activities': 250, 'tags': ['Nature', 'Adventure'], 'months': 'October–March', 'highlights': ['Hundru Falls', 'Dassam Falls', 'Rock Garden']}, {'place': 'Raipur', 'state': 'Chhattisgarh', 'region': 'Central', 'stay': 800, 'food': 550, 'local': 350, 'activities': 250, 'tags': ['Food', 'Nature', 'Culture'], 'months': 'October–March', 'highlights': ['Nandan Van', 'Purkhouti Muktangan', 'Sirpur day trip']}, {'place': 'Visakhapatnam', 'state': 'Andhra Pradesh', 'region': 'South', 'stay': 900, 'food': 600, 'local': 350, 'activities': 300, 'tags': ['Nature', 'Food', 'Adventure'], 'months': 'October–March', 'highlights': ['RK Beach', 'Kailasagiri', 'Submarine Museum']}, {'place': 'Araku Valley', 'state': 'Andhra Pradesh', 'region': 'South', 'stay': 900, 'food': 550, 'local': 500, 'activities': 300, 'tags': ['Nature', 'Adventure'], 'months': 'October–March', 'highlights': ['Borra Caves', 'Coffee plantations', 'Araku viewpoints']}, {'place': 'Port Blair (Sri Vijaya Puram)', 'state': 'Andaman and Nicobar Islands', 'region': 'Islands', 'stay': 1500, 'food': 800, 'local': 600, 'activities': 900, 'tags': ['Nature', 'Adventure', 'History'], 'months': 'November–April', 'highlights': ['Cellular Jail', "Corbyn's Cove", 'Ross Island boat trip']}, {'place': 'Srinagar', 'state': 'Jammu and Kashmir', 'region': 'North', 'stay': 1300, 'food': 700, 'local': 500, 'activities': 500, 'tags': ['Nature', 'Adventure', 'Snow'], 'months': 'April–October; winter for snow', 'highlights': ['Dal Lake', 'Mughal Gardens', 'Old Srinagar']}, {'place': 'Leh', 'state': 'Ladakh', 'region': 'North', 'stay': 1500, 'food': 750, 'local': 700, 'activities': 600, 'tags': ['Nature', 'Adventure', 'Snow'], 'months': 'May–September', 'highlights': ['Leh Palace', 'Shanti Stupa', 'Nubra Valley (permit/route dependent)']}, {'place': 'Kargil', 'state': 'Ladakh', 'region': 'North', 'stay': 1100, 'food': 650, 'local': 600, 'activities': 300, 'tags': ['Nature', 'Historical', 'Adventure'], 'months': 'May–September', 'highlights': ['Kargil War Memorial', 'Sur Valley', 'Local heritage sites']}]
-COORDS = {'Amritsar': (31.634, 74.8723), 'Chandigarh': (30.7333, 76.7794), 'Shimla': (31.1048, 77.1734), 'Manali': (32.2432, 77.1892), 'Dharamshala and McLeod Ganj': (32.219, 76.3234), 'Kasol': (32.01, 77.315), 'Rishikesh': (30.0869, 78.2676), 'Haridwar': (29.9457, 78.1642), 'Nainital': (29.3803, 79.4636), 'Jaipur': (26.9124, 75.7873), 'Udaipur': (24.5854, 73.7125), 'Jodhpur': (26.2389, 73.0243), 'Jaisalmer': (26.9157, 70.9083), 'Pushkar': (26.4899, 74.5511), 'Ujjain': (23.1793, 75.7849), 'Mandu': (22.3333, 75.4), 'Maheshwar': (22.1759, 75.587), 'Bhopal': (23.2599, 77.4126), 'Pachmarhi': (22.4674, 78.433), 'Khajuraho': (24.8318, 79.9199), 'Orchha': (25.3519, 78.6407), 'Varanasi': (25.3176, 82.9739), 'Agra': (27.1767, 78.0081), 'Lucknow': (26.8467, 80.9462), 'Mumbai': (19.076, 72.8777), 'Pune': (18.5204, 73.8567), 'Nashik': (19.9975, 73.7898), 'Mahabaleshwar': (17.9307, 73.6477), 'Goa': (15.2993, 74.124), 'Ahmedabad': (23.0225, 72.5714), 'Rann of Kutch': (23.7337, 69.8597), 'Diu': (20.7141, 70.9874), 'Hyderabad': (17.385, 78.4867), 'Hampi': (15.335, 76.46), 'Bengaluru': (12.9716, 77.5946), 'Mysuru': (12.2958, 76.6394), 'Coorg': (12.3375, 75.8069), 'Gokarna': (14.5479, 74.3188), 'Chennai': (13.0827, 80.2707), 'Ooty': (11.4064, 76.6932), 'Kodaikanal': (10.2381, 77.4892), 'Madurai': (9.9252, 78.1198), 'Rameswaram': (9.2876, 79.3129), 'Kochi': (9.9312, 76.2673), 'Munnar': (10.0889, 77.0595), 'Alappuzha': (9.4981, 76.3388), 'Varkala': (8.7379, 76.7163), 'Puducherry': (11.9416, 79.8083), 'Kolkata': (22.5726, 88.3639), 'Darjeeling': (27.041, 88.2663), 'Gangtok': (27.3389, 88.6065), 'Shillong': (25.5788, 91.8933), 'Cherrapunji (Sohra)': (25.2702, 91.7323), 'Kaziranga': (26.5775, 93.1711), 'Guwahati': (26.1445, 91.7362), 'Tawang': (27.586, 91.8594), 'Puri': (19.8135, 85.8312), 'Bhubaneswar': (20.2961, 85.8245), 'Ranchi': (23.3441, 85.3096), 'Raipur': (21.2514, 81.6296), 'Visakhapatnam': (17.6868, 83.2185), 'Araku Valley': (18.3273, 82.8775), 'Port Blair (Sri Vijaya Puram)': (11.6234, 92.7265), 'Srinagar': (34.0837, 74.7973), 'Leh': (34.1526, 77.5771), 'Kargil': (34.5539, 76.1349)}
-REGIONS = ["North","Central","West","South","East","Islands"]
-TAGS = sorted({tag for d in DESTINATIONS for tag in (d.get("tags") or [])})
+# ============================================================
+# TREKVERSE V6 — India Travel Planner
+# A single-file Streamlit app. Estimates are illustrative only.
+# ============================================================
 
-st.markdown("""
-<style>
-.stApp {{background:linear-gradient(135deg,#071b2b 0%,#102f3d 55%,#173b42 100%);}}
-.block-container {{max-width:1250px;padding-top:1.4rem;}}
-.hero {{padding:25px;border:1px solid #42616a;border-radius:18px;background:rgba(255,255,255,.07);}}
-div.stButton>button {{background:#0da8c9;color:white;border:0;border-radius:9px;font-weight:650;}}
-.smallnote {{padding:12px;border-left:4px solid #0da8c9;background:rgba(255,255,255,.07);}}
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(
+    page_title="TrekVerse | India Travel Planner",
+    page_icon="🧭",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+DESTINATIONS = [
+    {"place":"Indore","state":"Madhya Pradesh","region":"Central India","type":"Food & Culture","months":"October–March","daily":1800,"stay":1100,"lat":22.7196,"lon":75.8577,"tags":["food","culture","city","heritage"],"about":"A lively city known for street food, markets and nearby heritage sites."},
+    {"place":"Ujjain","state":"Madhya Pradesh","region":"Central India","type":"Spiritual","months":"October–March","daily":1600,"stay":900,"lat":23.1765,"lon":75.7885,"tags":["spiritual","culture","heritage"],"about":"An important pilgrimage city on the Shipra River."},
+    {"place":"Bhopal","state":"Madhya Pradesh","region":"Central India","type":"Nature & Culture","months":"October–March","daily":1900,"stay":1100,"lat":23.2599,"lon":77.4126,"tags":["nature","culture","lake","city"],"about":"A city of lakes, museums and nearby wildlife destinations."},
+    {"place":"Pachmarhi","state":"Madhya Pradesh","region":"Central India","type":"Nature","months":"October–June","daily":2300,"stay":1400,"lat":22.4674,"lon":78.4331,"tags":["nature","hills","waterfalls","adventure"],"about":"A hill station with forest trails, viewpoints and waterfalls."},
+    {"place":"Khajuraho","state":"Madhya Pradesh","region":"Central India","type":"Heritage","months":"October–March","daily":2200,"stay":1300,"lat":24.8318,"lon":79.9199,"tags":["heritage","culture","architecture"],"about":"Famous for its historic temple architecture."},
+    {"place":"Orchha","state":"Madhya Pradesh","region":"Central India","type":"Heritage","months":"October–March","daily":1900,"stay":1100,"lat":25.3519,"lon":78.6407,"tags":["heritage","culture","river"],"about":"A historic town with palaces, cenotaphs and riverside scenery."},
+    {"place":"Jabalpur","state":"Madhya Pradesh","region":"Central India","type":"Nature","months":"October–March","daily":2100,"stay":1200,"lat":23.1815,"lon":79.9864,"tags":["nature","waterfalls","river"],"about":"Gateway to marble rocks, waterfalls and forest reserves."},
+    {"place":"Amarkantak","state":"Madhya Pradesh","region":"Central India","type":"Nature & Spiritual","months":"October–March","daily":1800,"stay":1000,"lat":22.6745,"lon":81.7597,"tags":["nature","spiritual","hills"],"about":"A forested pilgrimage destination and source region of rivers."},
+    {"place":"Jaipur","state":"Rajasthan","region":"North India","type":"Heritage","months":"October–March","daily":2600,"stay":1600,"lat":26.9124,"lon":75.7873,"tags":["heritage","culture","shopping","food"],"about":"The Pink City, known for forts, palaces, crafts and food."},
+    {"place":"Udaipur","state":"Rajasthan","region":"North India","type":"Romantic & Heritage","months":"September–March","daily":3000,"stay":1900,"lat":24.5854,"lon":73.7125,"tags":["heritage","lake","culture","romantic"],"about":"A lakeside city with palaces, old streets and scenic views."},
+    {"place":"Jodhpur","state":"Rajasthan","region":"North India","type":"Heritage","months":"October–March","daily":2400,"stay":1400,"lat":26.2389,"lon":73.0243,"tags":["heritage","culture","desert"],"about":"The Blue City, dominated by Mehrangarh Fort."},
+    {"place":"Jaisalmer","state":"Rajasthan","region":"North India","type":"Desert","months":"October–February","daily":2800,"stay":1700,"lat":26.9157,"lon":70.9083,"tags":["desert","adventure","culture","heritage"],"about":"Golden sandstone architecture and Thar Desert experiences."},
+    {"place":"Pushkar","state":"Rajasthan","region":"North India","type":"Spiritual & Culture","months":"October–March","daily":2200,"stay":1300,"lat":26.4899,"lon":74.6399,"tags":["spiritual","culture","lake"],"about":"A pilgrimage town known for its lake and annual fair."},
+    {"place":"Mount Abu","state":"Rajasthan","region":"North India","type":"Hill Station","months":"October–March","daily":2500,"stay":1500,"lat":24.5926,"lon":72.7156,"tags":["hills","nature","lake"],"about":"Rajasthan's hill station with viewpoints and temples."},
+    {"place":"Delhi","state":"Delhi","region":"North India","type":"City & Heritage","months":"October–March","daily":2800,"stay":1700,"lat":28.6139,"lon":77.2090,"tags":["city","heritage","food","shopping"],"about":"A capital city with historic monuments, markets and museums."},
+    {"place":"Agra","state":"Uttar Pradesh","region":"North India","type":"Heritage","months":"October–March","daily":2300,"stay":1300,"lat":27.1767,"lon":78.0081,"tags":["heritage","architecture","culture"],"about":"Home to the Taj Mahal and other Mughal-era landmarks."},
+    {"place":"Varanasi","state":"Uttar Pradesh","region":"North India","type":"Spiritual & Culture","months":"October–March","daily":2200,"stay":1200,"lat":25.3176,"lon":82.9739,"tags":["spiritual","culture","river","food"],"about":"An ancient riverside city with ghats, temples and traditions."},
+    {"place":"Rishikesh","state":"Uttarakhand","region":"North India","type":"Adventure & Spiritual","months":"September–June","daily":2500,"stay":1400,"lat":30.0869,"lon":78.2676,"tags":["adventure","river","spiritual","yoga","nature"],"about":"Known for river activities, yoga and Himalayan foothill scenery."},
+    {"place":"Haridwar","state":"Uttarakhand","region":"North India","type":"Spiritual","months":"October–March","daily":1900,"stay":1000,"lat":29.9457,"lon":78.1642,"tags":["spiritual","river","culture"],"about":"A major pilgrimage city on the Ganges."},
+    {"place":"Mussoorie","state":"Uttarakhand","region":"North India","type":"Hill Station","months":"March–June; September–November","daily":2800,"stay":1700,"lat":30.4598,"lon":78.0644,"tags":["hills","nature","shopping"],"about":"A popular hill station with mountain views and walking streets."},
+    {"place":"Nainital","state":"Uttarakhand","region":"North India","type":"Hill Station","months":"March–June; September–November","daily":2700,"stay":1600,"lat":29.3803,"lon":79.4636,"tags":["hills","lake","nature"],"about":"A lake town surrounded by forested hills."},
+    {"place":"Manali","state":"Himachal Pradesh","region":"North India","type":"Adventure & Hill Station","months":"March–June; October–November","daily":3200,"stay":1900,"lat":32.2432,"lon":77.1892,"tags":["hills","adventure","snow","nature"],"about":"A mountain destination for scenic drives and outdoor activities."},
+    {"place":"Shimla","state":"Himachal Pradesh","region":"North India","type":"Hill Station","months":"March–June; December–January","daily":2900,"stay":1800,"lat":31.1048,"lon":77.1734,"tags":["hills","heritage","shopping"],"about":"A historic hill station with colonial-era architecture."},
+    {"place":"Dharamshala","state":"Himachal Pradesh","region":"North India","type":"Nature & Culture","months":"March–June; September–November","daily":2700,"stay":1600,"lat":32.2190,"lon":76.3234,"tags":["hills","nature","culture","spiritual"],"about":"A Himalayan town known for mountain scenery and Tibetan culture."},
+    {"place":"Leh","state":"Ladakh","region":"North India","type":"Adventure","months":"June–September","daily":4200,"stay":2500,"lat":34.1526,"lon":77.5771,"tags":["adventure","mountains","culture"],"about":"High-altitude landscapes, monasteries and mountain passes. Acclimatise carefully."},
+    {"place":"Srinagar","state":"Jammu and Kashmir","region":"North India","type":"Nature","months":"April–October","daily":3500,"stay":2100,"lat":34.0837,"lon":74.7973,"tags":["nature","lake","mountains","culture"],"about":"Known for Dal Lake, gardens and Himalayan scenery."},
+    {"place":"Amritsar","state":"Punjab","region":"North India","type":"Culture & Food","months":"October–March","daily":2300,"stay":1300,"lat":31.6340,"lon":74.8723,"tags":["culture","food","heritage","spiritual"],"about":"A major cultural destination with the Golden Temple and Punjabi cuisine."},
+    {"place":"Chandigarh","state":"Chandigarh","region":"North India","type":"City","months":"October–March","daily":2500,"stay":1500,"lat":30.7333,"lon":76.7794,"tags":["city","architecture","nature"],"about":"A planned city known for architecture and gardens."},
+    {"place":"Kolkata","state":"West Bengal","region":"East India","type":"Culture & Food","months":"October–March","daily":2300,"stay":1400,"lat":22.5726,"lon":88.3639,"tags":["city","culture","food","heritage"],"about":"A cultural capital with colonial landmarks, art and food."},
+    {"place":"Darjeeling","state":"West Bengal","region":"East India","type":"Hill Station","months":"March–May; October–December","daily":3000,"stay":1800,"lat":27.0360,"lon":88.2627,"tags":["hills","nature","tea","mountains"],"about":"A Himalayan hill town famous for tea gardens and mountain views."},
+    {"place":"Gangtok","state":"Sikkim","region":"East India","type":"Mountain & Culture","months":"March–June; September–November","daily":3200,"stay":1900,"lat":27.3314,"lon":88.6138,"tags":["mountains","nature","culture"],"about":"A mountain capital and base for exploring Sikkim."},
+    {"place":"Shillong","state":"Meghalaya","region":"East India","type":"Nature","months":"October–April","daily":2800,"stay":1600,"lat":25.5788,"lon":91.8933,"tags":["nature","hills","music","waterfalls"],"about":"A hill city surrounded by waterfalls and green landscapes."},
+    {"place":"Cherrapunji","state":"Meghalaya","region":"East India","type":"Nature & Adventure","months":"October–May","daily":3000,"stay":1700,"lat":25.2702,"lon":91.7323,"tags":["nature","waterfalls","adventure","hills"],"about":"Known for dramatic cliffs, caves and waterfalls."},
+    {"place":"Kaziranga","state":"Assam","region":"East India","type":"Wildlife","months":"November–April","daily":3500,"stay":2000,"lat":26.5775,"lon":93.1711,"tags":["wildlife","nature","adventure"],"about":"A major wildlife destination; safari access is seasonal and regulated."},
+    {"place":"Puri","state":"Odisha","region":"East India","type":"Beach & Spiritual","months":"October–February","daily":2300,"stay":1300,"lat":19.8135,"lon":85.8312,"tags":["beach","spiritual","culture","food"],"about":"A coastal pilgrimage destination with a long beach."},
+    {"place":"Bhubaneswar","state":"Odisha","region":"East India","type":"Heritage","months":"October–March","daily":2100,"stay":1200,"lat":20.2961,"lon":85.8245,"tags":["heritage","culture","temples"],"about":"Known for historic temples and nearby heritage sites."},
+    {"place":"Mumbai","state":"Maharashtra","region":"West India","type":"City & Food","months":"November–February","daily":3500,"stay":2200,"lat":19.0760,"lon":72.8777,"tags":["city","food","beach","shopping"],"about":"A major coastal metropolis with food, arts and iconic landmarks."},
+    {"place":"Pune","state":"Maharashtra","region":"West India","type":"City & Heritage","months":"October–February","daily":2600,"stay":1500,"lat":18.5204,"lon":73.8567,"tags":["city","food","heritage","nature"],"about":"A city with historic forts, food and nearby hill country."},
+    {"place":"Mahabaleshwar","state":"Maharashtra","region":"West India","type":"Hill Station","months":"October–June","daily":2800,"stay":1700,"lat":17.9307,"lon":73.6477,"tags":["hills","nature","strawberry"],"about":"A hill station with viewpoints, forests and strawberry farms."},
+    {"place":"Lonavala","state":"Maharashtra","region":"West India","type":"Hill Station","months":"June–February","daily":2400,"stay":1400,"lat":18.7546,"lon":73.4062,"tags":["hills","nature","waterfalls"],"about":"A popular short-break destination in the Western Ghats."},
+    {"place":"Goa","state":"Goa","region":"West India","type":"Beach","months":"November–February","daily":3500,"stay":2200,"lat":15.2993,"lon":74.1240,"tags":["beach","food","nightlife","water sports"],"about":"A coastal destination with beaches, heritage and seafood."},
+    {"place":"Ahmedabad","state":"Gujarat","region":"West India","type":"Culture & Food","months":"November–February","daily":2300,"stay":1300,"lat":23.0225,"lon":72.5714,"tags":["heritage","food","culture","city"],"about":"A UNESCO-listed historic city with architecture and food."},
+    {"place":"Kutch","state":"Gujarat","region":"West India","type":"Desert & Culture","months":"November–February","daily":3000,"stay":1700,"lat":23.7337,"lon":69.8597,"tags":["desert","culture","nature","festival"],"about":"Known for the White Rann and regional crafts."},
+    {"place":"Dwarka","state":"Gujarat","region":"West India","type":"Spiritual & Coastal","months":"October–March","daily":2200,"stay":1200,"lat":22.2442,"lon":68.9685,"tags":["spiritual","coast","culture"],"about":"A coastal pilgrimage town in Gujarat."},
+    {"place":"Somnath","state":"Gujarat","region":"West India","type":"Spiritual & Coastal","months":"October–March","daily":2200,"stay":1200,"lat":20.8880,"lon":70.4012,"tags":["spiritual","coast","heritage"],"about":"A coastal town known for its historic temple."},
+    {"place":"Hyderabad","state":"Telangana","region":"South India","type":"City & Food","months":"October–February","daily":2600,"stay":1500,"lat":17.3850,"lon":78.4867,"tags":["city","food","heritage","shopping"],"about":"A city famous for its food, forts and historic architecture."},
+    {"place":"Hampi","state":"Karnataka","region":"South India","type":"Heritage","months":"October–February","daily":2300,"stay":1200,"lat":15.3350,"lon":76.4600,"tags":["heritage","history","architecture","nature"],"about":"A remarkable landscape of historic Vijayanagara ruins."},
+    {"place":"Bengaluru","state":"Karnataka","region":"South India","type":"City","months":"October–February","daily":3000,"stay":1800,"lat":12.9716,"lon":77.5946,"tags":["city","food","parks","shopping"],"about":"A modern city with gardens, food and cultural spaces."},
+    {"place":"Mysuru","state":"Karnataka","region":"South India","type":"Heritage","months":"October–February","daily":2400,"stay":1400,"lat":12.2958,"lon":76.6394,"tags":["heritage","culture","palace","food"],"about":"Known for its palace, markets and cultural traditions."},
+    {"place":"Coorg","state":"Karnataka","region":"South India","type":"Nature","months":"October–March","daily":3000,"stay":1800,"lat":12.3375,"lon":75.8069,"tags":["nature","coffee","hills","waterfalls"],"about":"A green hill region known for coffee estates and forests."},
+    {"place":"Gokarna","state":"Karnataka","region":"South India","type":"Beach","months":"October–March","daily":2600,"stay":1500,"lat":14.5479,"lon":74.3188,"tags":["beach","nature","trekking"],"about":"A coastal town with beaches and walking trails."},
+    {"place":"Chennai","state":"Tamil Nadu","region":"South India","type":"City & Coast","months":"November–February","daily":2700,"stay":1600,"lat":13.0827,"lon":80.2707,"tags":["city","beach","culture","food"],"about":"A coastal metropolis with temples, arts and food."},
+    {"place":"Ooty","state":"Tamil Nadu","region":"South India","type":"Hill Station","months":"October–June","daily":2800,"stay":1700,"lat":11.4102,"lon":76.6950,"tags":["hills","nature","tea"],"about":"A Nilgiri hill station with gardens and tea estates."},
+    {"place":"Kodaikanal","state":"Tamil Nadu","region":"South India","type":"Hill Station","months":"October–June","daily":2700,"stay":1600,"lat":10.2381,"lon":77.4892,"tags":["hills","nature","lake"],"about":"A hill town known for its lake and forest walks."},
+    {"place":"Madurai","state":"Tamil Nadu","region":"South India","type":"Heritage & Spiritual","months":"October–March","daily":2100,"stay":1200,"lat":9.9252,"lon":78.1198,"tags":["heritage","spiritual","culture","food"],"about":"An ancient city centred around the Meenakshi temple."},
+    {"place":"Rameswaram","state":"Tamil Nadu","region":"South India","type":"Coastal & Spiritual","months":"October–April","daily":2300,"stay":1300,"lat":9.2876,"lon":79.3129,"tags":["coast","spiritual","nature"],"about":"A pilgrimage island with beaches and coastal landscapes."},
+    {"place":"Kochi","state":"Kerala","region":"South India","type":"Coastal & Culture","months":"October–March","daily":3000,"stay":1800,"lat":9.9312,"lon":76.2673,"tags":["coast","culture","food","heritage"],"about":"A port city with historic neighbourhoods and waterfronts."},
+    {"place":"Munnar","state":"Kerala","region":"South India","type":"Hill Station","months":"September–March","daily":3200,"stay":1900,"lat":10.0889,"lon":77.0595,"tags":["hills","nature","tea","wildlife"],"about":"A hill destination surrounded by tea plantations."},
+    {"place":"Alappuzha","state":"Kerala","region":"South India","type":"Backwaters","months":"October–March","daily":3200,"stay":1900,"lat":9.4981,"lon":76.3388,"tags":["backwaters","nature","water"],"about":"Known for Kerala backwaters and houseboat experiences."},
+    {"place":"Wayanad","state":"Kerala","region":"South India","type":"Nature & Wildlife","months":"October–May","daily":2800,"stay":1600,"lat":11.6854,"lon":76.1320,"tags":["nature","wildlife","hills","waterfalls"],"about":"A green district with forests, waterfalls and trekking areas."},
+    {"place":"Kovalam","state":"Kerala","region":"South India","type":"Beach","months":"October–March","daily":3000,"stay":1800,"lat":8.4004,"lon":76.9787,"tags":["beach","coast","relaxation"],"about":"A beach destination near Thiruvananthapuram."},
+    {"place":"Pondicherry","state":"Puducherry","region":"South India","type":"Coastal & Culture","months":"October–March","daily":2800,"stay":1700,"lat":11.9416,"lon":79.8083,"tags":["coast","culture","food","heritage"],"about":"A coastal town known for its promenade and French-influenced quarter."},
+    {"place":"Visakhapatnam","state":"Andhra Pradesh","region":"South India","type":"Coastal","months":"October–March","daily":2400,"stay":1400,"lat":17.6868,"lon":83.2185,"tags":["coast","beach","nature"],"about":"A port city with beaches and nearby hill landscapes."},
+    {"place":"Tirupati","state":"Andhra Pradesh","region":"South India","type":"Spiritual","months":"September–March","daily":2100,"stay":1100,"lat":13.6288,"lon":79.4192,"tags":["spiritual","nature","culture"],"about":"A major pilgrimage destination in the Tirumala hills."},
+    {"place":"Andaman Islands","state":"Andaman and Nicobar Islands","region":"Islands","type":"Beach & Adventure","months":"October–May","daily":5000,"stay":3000,"lat":11.7401,"lon":92.6586,"tags":["beach","island","adventure","water sports"],"about":"An island destination with beaches, reefs and water activities."},
+    {"place":"Lakshadweep","state":"Lakshadweep","region":"Islands","type":"Island & Nature","months":"October–March","daily":6000,"stay":3500,"lat":10.5667,"lon":72.6417,"tags":["beach","island","nature","water sports"],"about":"A coral island group with permit and travel requirements."},
+]
+
+INTERESTS = ["nature","adventure","beach","heritage","culture","food","spiritual","hills","wildlife","shopping","lake","waterfalls","island","coast","desert"]
+
+def estimate_cost(destination, days, travellers, travel_fare_per_person=0):
+    """Return a transparent illustrative group-cost estimate."""
+    stay = int(destination["stay"] * days * travellers)
+    food = int(destination["daily"] * 0.30 * days * travellers)
+    local = int(destination["daily"] * 0.15 * days * travellers)
+    activities = int(destination["daily"] * 0.20 * days * travellers)
+    intercity = int(max(0, travel_fare_per_person) * travellers)
+    return {
+        "stay": stay,
+        "food": food,
+        "local": local,
+        "activities": activities,
+        "intercity": intercity,
+        "total": stay + food + local + activities + intercity,
+    }
+
+def rank_destinations(origin, budget, days, travellers, selected_interests, max_results=12):
+    results = []
+    for d in DESTINATIONS:
+        cost = estimate_cost(d, days, travellers)
+        interest_score = sum(1 for tag in selected_interests if tag in d["tags"])
+        budget_fit = 1.0 if cost["total"] <= budget else max(0.0, budget / max(cost["total"], 1))
+        same_state_bonus = 0.15 if origin.strip().lower() == d["state"].lower() else 0
+        score = interest_score * 2 + budget_fit * 3 + same_state_bonus
+        results.append((score, cost["total"], d, cost))
+    results.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    affordable = [x for x in results if x[1] <= budget]
+    return (affordable or results)[:max_results]
 
 def maps_url(place):
-    return "https://www.google.com/maps/search/?api=1&query="+quote_plus(place+", India")
+    from urllib.parse import quote_plus
+    return "https://www.google.com/maps/search/?api=1&query=" + quote_plus(place + ", India")
 
-def weather_for(place):
-    lat,lon=COORDS[place]
-    params={{"latitude":lat,"longitude":lon,"current":"temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m",
-            "daily":"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max","timezone":"auto","forecast_days":7}}
-    r=requests.get("https://api.open-meteo.com/v1/forecast",params=params,timeout=15); r.raise_for_status()
-    return r.json()
+def make_itinerary(destination, days, interests):
+    day_plans = []
+    ideas = [
+        ["Arrive, check in and explore the main market or town centre.", "Visit a well-known local landmark.", "Try a regional meal and take an easy evening walk."],
+        ["Start with the destination's main attraction.", "Explore a nearby nature, heritage or cultural site.", "Keep the evening flexible for local food."],
+        ["Choose a guided local experience or short outdoor activity.", "Visit a viewpoint, museum or neighbourhood.", "Return early and prepare for the next day."],
+        ["Explore a nearby day-trip location.", "Keep time for shopping and photographs.", "Enjoy a relaxed final evening."],
+    ]
+    for i in range(days):
+        lines = ideas[i % len(ideas)].copy()
+        if "adventure" in interests:
+            lines[1] = "Consider a locally operated outdoor activity, subject to weather and safety conditions."
+        if "food" in interests:
+            lines[2] = "Try a reputable local food spot and regional specialities."
+        day_plans.append((f"Day {i+1}", lines))
+    return day_plans
 
-def wx(code):
-    return {{0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",51:"Drizzle",53:"Drizzle",55:"Heavy drizzle",
-    61:"Light rain",63:"Rain",65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Showers",81:"Showers",82:"Heavy showers",
-    95:"Thunderstorm",96:"Thunderstorm with hail",99:"Severe thunderstorm"}}.get(code,"Variable conditions")
+def build_pdf(destination, days, travellers, interests, cost, itinerary):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=38, leftMargin=38, topMargin=38, bottomMargin=38)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("TrekVerse — Travel Plan", styles["Title"]), Spacer(1, 10)]
+    story.append(Paragraph(f"<b>Destination:</b> {destination['place']}, {destination['state']}", styles["BodyText"]))
+    story.append(Paragraph(f"<b>Duration:</b> {days} days &nbsp;&nbsp; <b>Travellers:</b> {travellers}", styles["BodyText"]))
+    story.append(Paragraph(f"<b>Interests:</b> {', '.join(interests) if interests else 'General sightseeing'}", styles["BodyText"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Illustrative budget estimate", styles["Heading2"]))
+    rows = [["Expense", "Estimated amount (INR)"], ["Stay", f"₹{cost['stay']:,}"], ["Food", f"₹{cost['food']:,}"], ["Local travel", f"₹{cost['local']:,}"], ["Activities", f"₹{cost['activities']:,}"], ["Intercity travel", f"₹{cost['intercity']:,}"], ["Total", f"₹{cost['total']:,}"]]
+    table = Table(rows, colWidths=[250, 180])
+    table.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#16324F")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("GRID",(0,0),(-1,-1),0.5,colors.grey),("PADDING",(0,0),(-1,-1),7),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold")]))
+    story.append(table)
+    story.append(Spacer(1,12))
+    story.append(Paragraph("Suggested day-wise plan", styles["Heading2"]))
+    for title, lines in itinerary:
+        story.append(Paragraph(title, styles["Heading3"]))
+        for line in lines:
+            story.append(Paragraph("• " + line, styles["BodyText"]))
+    story.append(Spacer(1,10))
+    story.append(Paragraph("Note: Prices are illustrative planning estimates, not live quotes or guaranteed costs. Verify transport, accommodation, permits, weather and local conditions before travel.", styles["Italic"]))
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-def estimate(d, days, people, comfort, fare_pp):
-    mult=1.35 if comfort=="Comfortable" else 1.0
-    stay=round(d["stay"]*days*mult)*people
-    food=round(d["food"]*days*(1.15 if comfort=="Comfortable" else 1.0))*people
-    local=d["local"]*days*people
-    activities=d["activities"]*days*people
-    intercity=fare_pp*people
-    return {"stay": stay, "food": food, "local": local, "activities": activities, "intercity": intercity, "total": stay + food + local + activities + intercity}
+def assistant_reply(question):
+    q = question.lower()
+    if any(x in q for x in ["budget","cost","cheap","₹","rupee"]):
+        return "Use Discover & Budget to compare estimated group costs. Add your intercity fare separately. Estimates are illustrative and may differ from actual prices."
+    if any(x in q for x in ["weather","rain","temperature"]):
+        return "Open the Weather tab, choose a destination and load the forecast. Check local advisories before outdoor activities."
+    if any(x in q for x in ["pack","packing","carry"]):
+        return "Pack ID, medicines, reusable water bottle, comfortable footwear, weather-appropriate layers, chargers, power bank and any destination-specific permits. For high altitude, plan acclimatisation."
+    if any(x in q for x in ["map","direction","route","location"]):
+        return "Open the Map tab to view approximate destination markers, or use the Google Maps link on a destination card for navigation."
+    if any(x in q for x in ["best time","season","when to visit"]):
+        return "Check the Best season field on each destination card. Seasons are broad guidance; verify current weather and local closures."
+    if any(x in q for x in ["safety","emergency","police"]):
+        return "For emergencies in India, call 112. Share your itinerary with someone you trust and follow local authority guidance."
+    return "I can help with budget estimates, itinerary ideas, packing, maps, seasons and basic safety tips. Try asking a more specific travel question. This is a rule-based helper, not a live generative AI service."
 
-def itinerary_for(d, days):
-    h=d["highlights"]
-    return [{{"day":i+1,"morning":h[(2*i)%len(h)],"afternoon":h[(2*i+1)%len(h)],"evening":h[(2*i+2)%len(h)]}} for i in range(days)]
+# Sidebar / common inputs
+st.sidebar.title("🧭 TrekVerse")
+st.sidebar.caption("Explore India. Plan within your budget.")
+st.sidebar.info("Planning estimates only. Verify live prices, availability, permits and local advisories before booking.")
+origin = st.sidebar.text_input("Your starting city / state", value="Indore")
+budget = st.sidebar.number_input("Total trip budget (₹)", min_value=1000, max_value=10000000, value=15000, step=1000)
+travellers = st.sidebar.number_input("Travellers", min_value=1, max_value=30, value=2, step=1)
+days = st.sidebar.number_input("Trip duration (days)", min_value=1, max_value=30, value=3, step=1)
+selected_interests = st.sidebar.multiselect("Interests", INTERESTS, default=["nature","food"])
+travel_fare = st.sidebar.number_input("Intercity fare per person (₹, optional)", min_value=0, max_value=500000, value=0, step=500)
 
-def make_pdf(title, lines):
-    buff=io.BytesIO()
-    doc=SimpleDocTemplate(buff,pagesize=A4,rightMargin=38,leftMargin=38,topMargin=40,bottomMargin=40)
-    styles=getSampleStyleSheet(); story=[Paragraph(title,styles["Title"]),Spacer(1,12)]
-    for line in lines:
-        story.append(Paragraph(str(line).replace("&","&amp;"),styles["BodyText"])); story.append(Spacer(1,7))
-    doc.build(story); return buff.getvalue()
+if "saved_places" not in st.session_state:
+    st.session_state.saved_places = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-st.markdown('<div class="hero">',unsafe_allow_html=True)
-st.title("🧭 TrekVerse V6 — The India Travel Command Centre")
-st.write("Discover places, compare budgets, plan multi-stop journeys, check weather, map destinations and export a travel booklet.")
-st.caption("One consolidated release • 66 destinations • Free/open tools • No paid AI API key")
-st.markdown('</div>',unsafe_allow_html=True)
+st.title("🧭 TrekVerse")
+st.subheader("Your India travel planner — destinations, budgets, itineraries and maps")
+st.caption("V6 • Free planning tools • Estimates are not live booking prices")
 
-with st.sidebar:
-    st.header("Trip controls")
-    origin=st.text_input("Starting city","Indore")
-    budget=st.number_input("Total group budget (₹)",500,1000000,10000,500)
-    people=st.number_input("Travellers",1,30,2)
-    days=st.slider("Days per destination",1,14,2)
-    month=st.selectbox("Travel month",["January","February","March","April","May","June","July","August","September","October","November","December"],index=10)
-    interests=st.multiselect("Interests",TAGS,default=["Nature","Historical"])
-    comfort=st.selectbox("Travel style",["Budget","Comfortable"])
-    fare_pp=st.number_input("Round-trip intercity fare per person (₹)",0,200000,0,250)
-    regions=st.multiselect("Regions",REGIONS,default=REGIONS)
-    st.caption("Enter a checked fare. The app cannot verify live ticket prices.")
+tabs = st.tabs([
+    "Discover & Budget",
+    "Itinerary Studio",
+    "Multi-city Route",
+    "Map",
+    "Weather",
+    "Travel Chat",
+    "Saved Places",
+    "Admin & Data",
+    "Trip Toolkit",
+])
 
-per_person=budget/people
-m1,m2,m3,m4=st.columns(4)
-m1.metric("Group budget",f"₹{budget:,}")
-m2.metric("Travellers",people)
-m3.metric("Days / stop",days)
-m4.metric("Per-person budget",f"₹{per_person:,.0f}")
-
-# Recommendation engine
-matches=[]
-for d in DESTINATIONS:
-    if d["region"] not in regions: continue
-    cost=estimate(d,days,people,comfort,fare_pp)
-    if cost["total"]<=budget:
-        score=len(set(interests)&set(d["tags"]))*4 + (2 if cost["total"]<budget*.75 else 0)
-        matches.append((score,cost["total"],d,cost))
-matches.sort(key=lambda x:(x[0],-x[1]),reverse=True)
-
-tabs=st.tabs(["✨ Discover & Budget","🗓️ Itinerary Studio","🧭 Multi-city Route","🗺️ Map","🌤️ Weather","🤖 Travel Chat","❤️ Saved Places","🧰 Admin & Data","🎒 Trip Toolkit"])
-
+# TAB 1 — Discover
 with tabs[0]:
-    st.header("Destinations that fit your budget")
-    st.caption(f"Planning from {origin}. Estimates are illustrative; intercity fare uses your sidebar input.")
-    if not matches: st.warning("No destination fits these inputs. Increase budget, reduce days/people, or adjust regions/interests.")
-    for score,total,d,cost in matches[:20]:
-        with st.expander(f"📍 {d['place']}, {d['state']} — ₹{total:,} estimated group total"):
-            st.write("**Highlights:** "+", ".join(d["highlights"]))
-            st.write(f"**Region:** {d['region']} | **Best season:** {d['months']} | **Tags:** {', '.join(d['tags'])}")
-            cols=st.columns(6)
-            for col,(label,key) in zip(cols,[("Stay","stay"),("Food","food"),("Local","local"),("Activities","activities"),("Intercity","intercity"),("Total","total")]):
-                col.metric(label,f"₹{cost[key]:,}")
-            st.write(f"**Remaining budget:** ₹{budget-total:,}")
-            st.link_button("Open on Google Maps",maps_url(d["place"]))
-            if st.button("♡ Save destination",key="save_"+d["place"]):
-                saved=st.session_state.get("saved_places",[])
-                if d["place"] not in saved: saved.append(d["place"])
-                st.session_state.saved_places=saved
-                st.success("Saved to your favourites.")
-       if matches:
-        df = pd.DataFrame([
-            {
+    st.header("Find destinations that fit your trip")
+    matches = rank_destinations(origin, budget, int(days), int(travellers), selected_interests)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Destinations in catalogue", len(DESTINATIONS))
+    col2.metric("Budget", f"₹{budget:,.0f}")
+    col3.metric("Recommended results", len(matches))
+    search_text = st.text_input("Search destination or state", key="destination_search")
+    filtered = [item for item in matches if not search_text or search_text.lower() in item[2]["place"].lower() or search_text.lower() in item[2]["state"].lower()]
+    if not filtered:
+        st.warning("No matching destination in the current ranked results. Clear the search or try another term.")
+    for score, total, d, c in filtered:
+        with st.container(border=True):
+            left, right = st.columns([3, 1])
+            with left:
+                st.subheader(f"{d['place']} · {d['state']}")
+                st.write(d["about"])
+                st.caption(f"{d['type']}  |  Best season: {d['months']}  |  Tags: {', '.join(d['tags'])}")
+                st.link_button("Open on Google Maps", maps_url(d["place"]))
+            with right:
+                st.metric("Estimated group total", f"₹{c['total']:,}")
+                remaining = int(budget - c["total"])
+                st.metric("Budget remaining", f"₹{remaining:,}", delta="Within budget" if remaining >= 0 else "Over budget")
+                if st.button("♡ Save destination", key="save_" + d["place"]):
+                    if d["place"] not in st.session_state.saved_places:
+                        st.session_state.saved_places.append(d["place"])
+                    st.success("Saved to this browser session.")
+    if matches:
+        comparison_rows = []
+        for _, _, d, c in filtered:
+            comparison_rows.append({
                 "Destination": d["place"],
                 "State": d["state"],
                 "Group estimate (₹)": c["total"],
                 "Remaining (₹)": budget - c["total"],
-                "Best season": d["months"]
-            }
-            for _, _, d, c in matches
-        ])
+                "Best season": d["months"],
+            })
+        if comparison_rows:
+            comparison_df = pd.DataFrame(comparison_rows)
+            st.download_button(
+                "Download comparison CSV",
+                data=comparison_df.to_csv(index=False).encode("utf-8"),
+                file_name="trekverse_comparison.csv",
+                mime="text/csv",
+            )
 
-        st.download_button(
-            "Download comparison CSV",
-            df.to_csv(index=False).encode(),
-            "trekverse_comparison.csv",
-            "text/csv"
-        )
-
+# TAB 2 — Itinerary
 with tabs[1]:
-    plan=itinerary_for(d,days)
-    cost=estimate(d,days,people,comfort,fare_pp)
-    st.subheader(f"{days}-day plan: {d['place']}")
-    st.info("This is a sample schedule based on known highlights. Check distances, opening hours, tickets and local access before following it.")
-    for p in plan:
-        with st.expander(f"Day {p['day']}",expanded=p["day"]==1):
-            st.write(f"**Morning:** {p['morning']}")
-            st.write(f"**Afternoon:** {p['afternoon']}")
-            st.write(f"**Evening:** {p['evening']}")
-            st.write("Leave time for meals, rest and travel between sites.")
-    st.subheader("Estimated group budget")
-    cc=st.columns(6)
-    for col,(label,key) in zip(cc,[("Stay","stay"),("Food","food"),("Local","local"),("Activities","activities"),("Intercity","intercity"),("Total","total")]):
-        col.metric(label,f"₹{cost[key]:,}")
-    pdf_lines=[f"Starting city: {origin}",f"Destination: {d['place']}, {d['state']}",f"Travellers: {people}; Days: {days}; Month: {month}",
-               "Highlights: "+", ".join(d["highlights"])]
-    for p in plan: pdf_lines.append(f"Day {p['day']}: Morning {p['morning']}; Afternoon {p['afternoon']}; Evening {p['evening']}.")
-    pdf_lines += [f"Accommodation estimate: ₹{cost['stay']}",f"Food estimate: ₹{cost['food']}",f"Local transport estimate: ₹{cost['local']}",
-                  f"Activities estimate: ₹{cost['activities']}",f"Intercity transport estimate: ₹{cost['intercity']}",f"Total estimate: ₹{cost['total']}",
-                  "All prices are planning estimates, not live quotes."]
-    st.download_button("📘 Download printable PDF travel booklet",make_pdf("TrekVerse Travel Plan",pdf_lines),
-                       file_name=f"trekverse_{d['place'].lower().replace(' ','_')}.pdf",mime="application/pdf")
-    st.download_button("Download itinerary CSV",pd.DataFrame(plan).to_csv(index=False).encode(),"trekverse_itinerary.csv","text/csv")
+    st.header("Day-wise itinerary studio")
+    choices = [d for _, _, d, _ in matches] or DESTINATIONS
+    chosen = st.selectbox("Choose destination", [d["place"] for d in choices], key="itinerary_destination")
+    destination = next(d for d in DESTINATIONS if d["place"] == chosen)
+    itinerary = make_itinerary(destination, int(days), selected_interests)
+    itinerary_cost = estimate_cost(destination, int(days), int(travellers), int(travel_fare))
+    st.write(f"### {destination['place']}, {destination['state']}")
+    st.write(destination["about"])
+    for heading, activities in itinerary:
+        with st.expander(heading, expanded=True):
+            for activity in activities:
+                st.write("• " + activity)
+    st.subheader("Estimated budget breakdown")
+    budget_df = pd.DataFrame([
+        {"Expense": "Stay", "Amount (₹)": itinerary_cost["stay"]},
+        {"Expense": "Food", "Amount (₹)": itinerary_cost["food"]},
+        {"Expense": "Local travel", "Amount (₹)": itinerary_cost["local"]},
+        {"Expense": "Activities", "Amount (₹)": itinerary_cost["activities"]},
+        {"Expense": "Intercity travel", "Amount (₹)": itinerary_cost["intercity"]},
+    ])
+    st.dataframe(budget_df, use_container_width=True, hide_index=True)
+    st.metric("Estimated total", f"₹{itinerary_cost['total']:,}")
+    st.download_button("Download itinerary CSV", budget_df.to_csv(index=False).encode("utf-8"), "trekverse_itinerary_budget.csv", "text/csv")
+    pdf_bytes = build_pdf(destination, int(days), int(travellers), selected_interests, itinerary_cost, itinerary)
+    st.download_button("Download travel booklet (PDF)", pdf_bytes, "trekverse_travel_plan.pdf", "application/pdf")
 
+# TAB 3 — Multi-city
 with tabs[2]:
-    st.header("Multi-city journey planner")
-    st.write("Build a sequence of stops. The tool totals destination-day estimates; add intercity fare estimates for the full route.")
-    allnames=[d["place"] for d in DESTINATIONS]
-    route=st.multiselect("Select stops in the order you want to visit",allnames,default=[x for x in ["Ujjain","Jaipur"] if x in allnames],max_selections=8)
-    route_days=st.number_input("Days at each stop",1,14,2,key="route_days")
-    route_fare=st.number_input("Estimated total intercity transport for entire group (₹)",0,500000,0,500,key="route_fare")
-    if route:
-        route_rows=[]; total_dest=0
-        for place in route:
-            item=next(x for x in DESTINATIONS if x["place"]==place)
-            c=estimate(item,route_days,people,comfort,0)
-            total_dest+=c["total"]
-            route_rows.append({{"Stop":place,"State":item["state"],"Days":route_days,"Estimated stay+food+local+activities (₹)":c["total"]}})
-        grand=total_dest+route_fare
-        st.dataframe(pd.DataFrame(route_rows),use_container_width=True,hide_index=True)
-        st.metric("Estimated total route cost",f"₹{grand:,}")
-        st.metric("Budget remaining / overrun",f"₹{budget-grand:,}")
-        if grand>budget: st.warning("This route is over budget based on your estimates.")
-        else: st.success("This route fits your entered budget based on your estimates.")
-        st.link_button("Open route search in Google Maps","https://www.google.com/maps/dir/"+"/".join(quote_plus(x+", India") for x in [origin]+route))
-        st.download_button("Download multi-city route CSV",pd.DataFrame(route_rows).to_csv(index=False).encode(),"trekverse_multi_city.csv","text/csv")
-    else: st.info("Choose at least one stop.")
+    st.header("Multi-city trip cost estimator")
+    st.warning("This tool adds estimated costs for selected stops. It does not optimise route order or calculate live directions/fares.")
+    city_names = [d["place"] for d in DESTINATIONS]
+    selected_cities = st.multiselect("Choose destinations / stops", city_names, default=["Indore","Ujjain"])
+    city_days = st.number_input("Days per stop", min_value=1, max_value=15, value=2, key="multi_days")
+    if selected_cities:
+        route_rows = []
+        route_total = 0
+        for city in selected_cities:
+            d = next(x for x in DESTINATIONS if x["place"] == city)
+            c = estimate_cost(d, int(city_days), int(travellers))
+            route_total += c["total"]
+            route_rows.append({"Stop": city, "State": d["state"], "Days": city_days, "Estimated cost (₹)": c["total"]})
+        route_df = pd.DataFrame(route_rows)
+        st.dataframe(route_df, use_container_width=True, hide_index=True)
+        st.metric("Estimated total for selected stops", f"₹{route_total:,}")
+        st.download_button("Download multi-city estimate CSV", route_df.to_csv(index=False).encode("utf-8"), "trekverse_multi_city.csv", "text/csv")
+    else:
+        st.info("Choose at least one stop to calculate an estimate.")
 
+# TAB 4 — Map
 with tabs[3]:
-    st.header("Interactive destination map")
-    map_places=[d for d in DESTINATIONS if d["region"] in regions]
-    mp=folium.Map(location=[22.5,79],zoom_start=4,tiles="OpenStreetMap")
-    for d in map_places:
-        lat,lon=COORDS[d["place"]]
-        folium.Marker([lat,lon],tooltip=d["place"],popup=f"{d['place']}, {d['state']}").add_to(mp)
-    st_folium(mp,height=500,width=None,returned_objects=[])
-    st.caption("Pins mark approximate city/destination centres, not every attraction.")
+    st.header("Explore destinations on the map")
+    map_region = st.selectbox("Filter region", ["All regions"] + sorted({d["region"] for d in DESTINATIONS}))
+    map_data = [d for d in DESTINATIONS if map_region == "All regions" or d["region"] == map_region]
+    m = folium.Map(location=[22.5, 79.0], zoom_start=5, tiles="OpenStreetMap")
+    for d in map_data:
+        folium.Marker(
+            [d["lat"], d["lon"]],
+            tooltip=d["place"],
+            popup=f"<b>{d['place']}</b><br>{d['state']}<br>{d['type']}",
+        ).add_to(m)
+    st_folium(m, use_container_width=True, height=520, returned_objects=[])
+    st.caption("Map markers show approximate destination centres, not exact hotels, attractions or route paths.")
 
+# TAB 5 — Weather
 with tabs[4]:
-    st.header("Live weather forecast")
-    wp=st.selectbox("Destination for weather",[d["place"] for d in DESTINATIONS],key="weather_place")
-    if st.button("Fetch 7-day forecast"):
+    st.header("Weather forecast")
+    weather_place = st.selectbox("Choose destination", [d["place"] for d in DESTINATIONS], key="weather_destination")
+    wd = next(d for d in DESTINATIONS if d["place"] == weather_place)
+    if st.button("Load current weather and 7-day forecast"):
         try:
-            with st.spinner("Contacting Open-Meteo..."): w=weather_for(wp)
-            cur=w["current"]
-            a,b,c,e=st.columns(4)
-            a.metric("Temperature",f"{{cur['temperature_2m']}} °C")
-            b.metric("Feels like",f"{{cur['apparent_temperature']}} °C")
-            c.metric("Humidity",f"{{cur['relative_humidity_2m']}}%")
-            e.metric("Wind",f"{{cur['wind_speed_10m']}} km/h")
-            daily=w["daily"]
-            weather_df=pd.DataFrame({{"Date":daily["time"],"Weather":[wx(x) for x in daily["weather_code"]],
-                "Min °C":daily["temperature_2m_min"],"Max °C":daily["temperature_2m_max"],
-                "Rain chance %":daily["precipitation_probability_max"]}})
-            st.dataframe(weather_df,use_container_width=True,hide_index=True)
-            st.caption("Open-Meteo forecast; recheck before travel. Weather is not a safety guarantee.")
-        except Exception as ex: st.error(f"Weather service unavailable: {{ex}}")
-    st.link_button("Open this destination in Google Maps",maps_url(wp))
+            url = "https://api.open-meteo.com/v1/forecast"
+            params = {
+                "latitude": wd["lat"],
+                "longitude": wd["lon"],
+                "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+                "timezone": "auto",
+                "forecast_days": 7,
+            }
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            weather = response.json()
+            current = weather.get("current", {})
+            a, b, c = st.columns(3)
+            a.metric("Temperature", f"{current.get('temperature_2m','—')} °C")
+            b.metric("Feels like", f"{current.get('apparent_temperature','—')} °C")
+            c.metric("Wind speed", f"{current.get('wind_speed_10m','—')} km/h")
+            daily = weather.get("daily", {})
+            forecast_df = pd.DataFrame({
+                "Date": daily.get("time", []),
+                "Min °C": daily.get("temperature_2m_min", []),
+                "Max °C": daily.get("temperature_2m_max", []),
+                "Rain chance %": daily.get("precipitation_probability_max", []),
+                "Weather code": daily.get("weather_code", []),
+            })
+            st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+            st.caption("Weather data supplied by Open-Meteo. Forecasts can change; verify before travel.")
+        except Exception as exc:
+            st.error(f"Weather could not be loaded. Check your internet connection and try again. Details: {exc}")
 
+# TAB 6 — Travel Chat
 with tabs[5]:
-    st.header("Travel chat assistant")
-    st.caption("Free local rule-based helper; it is not a generative LLM.")
-    if "chat" not in st.session_state:
-        st.session_state.chat=[("assistant","Hi! Tell me your budget, days and interests. Example: ₹5000 for 2 days, nature, from Indore.")]
-    for role,msg in st.session_state.chat:
-        with st.chat_message(role): st.markdown(msg)
-    prompt=st.chat_input("Ask TrekVerse...")
+    st.header("TrekVerse travel helper")
+    st.caption("Rule-based assistant: it does not call a generative AI model.")
+    for entry in st.session_state.chat_history:
+        with st.chat_message(entry["role"]):
+            st.write(entry["content"])
+    prompt = st.chat_input("Ask about budgets, packing, seasons, maps or safety...")
     if prompt:
-        st.session_state.chat.append(("user",prompt))
-        q=prompt.lower()
-        dm=re.search(r"(\d[\d,]*)\s*(k)?",q)
-        cb=int(dm.group(1).replace(",",""))*(1000 if dm and dm.group(2) else 1) if dm else budget
-        daym=re.search(r"(\d+)\s*days?",q); nd=int(daym.group(1)) if daym else days
-        wanted=[t for t in TAGS if t.lower() in q]
-        cand=[]
-        for dest in DESTINATIONS:
-            if dest["region"] not in regions or (wanted and not set(wanted)&set(dest["tags"])): continue
-            est=estimate(dest,max(1,min(nd,14)),people,comfort,fare_pp)
-            if est["total"]<=cb: cand.append((est["total"],dest,est))
-        cand.sort(key=lambda x:x[0])
-        if cand:
-            answer=f"For about ₹{{cb:,}}, here are options for {{nd}} day(s):\n\n"+ "\n".join(
-                f"- **{{dest['place']}}, {{dest['state']}}** — estimate ₹{{est['total']:,}}. Highlights: {{', '.join(dest['highlights'][:2])}}."
-                for _,dest,est in cand[:5])
-            if fare_pp==0: answer+="\n\nNote: your intercity fare is set to zero, so travel from the origin is excluded."
-            answer+="\n\nThese are estimates, not live prices."
-        else:
-            answer="I couldn't find a match in the current data. Try a higher budget, fewer days or different interests. Enter a checked return fare in the sidebar."
-        st.session_state.chat.append(("assistant",answer))
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        answer = assistant_reply(prompt)
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()
-    if st.button("Clear conversation"): st.session_state.chat=[]; st.rerun()
+    if st.button("Clear chat"):
+        st.session_state.chat_history = []
+        st.rerun()
 
+# TAB 7 — Saved
 with tabs[6]:
-    st.header("Saved places & favourites")
-    if "saved_places" not in st.session_state: st.session_state.saved_places=[]
-    saved=st.session_state.saved_places
-    if saved:
-        for name in saved:
-            dest=next((x for x in DESTINATIONS if x["place"]==name),None)
-            if dest:
-                st.write(f"❤️ **{{name}}**, {{dest['state']}} — "+", ".join(dest["highlights"]))
-                st.link_button(f"Map: {{name}}",maps_url(name),key="map_saved_"+name)
-        if st.button("Clear favourites"): st.session_state.saved_places=[]; st.rerun()
-        st.download_button("Export favourites CSV",pd.DataFrame({{"Favourite":saved}}).to_csv(index=False).encode(),"trekverse_favourites.csv","text/csv")
-    else: st.info("Save destinations from the Discover tab. Favourites remain in this browser session; they are not a permanent user account.")
+    st.header("Saved destinations")
+    st.caption("Saved places remain in this browser session only; they are not stored in a cloud account.")
+    if st.session_state.saved_places:
+        for place in st.session_state.saved_places:
+            d = next((x for x in DESTINATIONS if x["place"] == place), None)
+            if d:
+                st.write(f"**{d['place']}**, {d['state']} — {d['type']}")
+                st.link_button("Open map", maps_url(d["place"]), key="saved_map_" + d["place"])
+        if st.button("Clear saved places"):
+            st.session_state.saved_places = []
+            st.rerun()
+    else:
+        st.info("You have not saved any destinations yet. Use the Save destination button in Discover & Budget.")
 
+# TAB 8 — Admin / Data
 with tabs[7]:
-    st.header("Admin tools & destination data")
-    st.write("Download the built-in destination database, or upload a CSV to review extra destination records for your own planning.")
-    base_df=pd.DataFrame([{{"place":d["place"],"state":d["state"],"region":d["region"],"stay_per_day":d["stay"],
-        "food_per_day":d["food"],"local_per_day":d["local"],"activities_per_day":d["activities"],
-        "tags":";".join(d["tags"]),"highlights":";".join(d["highlights"]),"best_season":d["months"]}} for d in DESTINATIONS])
-    st.download_button("Download destination database CSV",base_df.to_csv(index=False).encode(),"trekverse_destination_database.csv","text/csv")
-    upload=st.file_uploader("Upload destination CSV (preview only)",type=["csv"])
-    if upload:
+    st.header("Destination data")
+    st.write(f"Current built-in catalogue: **{len(DESTINATIONS)} destinations**.")
+    data_df = pd.DataFrame(DESTINATIONS)
+    st.dataframe(data_df[["place","state","region","type","months","daily","stay"]], use_container_width=True, hide_index=True)
+    st.download_button("Download destination catalogue CSV", data_df.to_csv(index=False).encode("utf-8"), "trekverse_destinations.csv", "text/csv")
+    uploaded = st.file_uploader("Preview an alternative destination CSV (does not change the built-in catalogue)", type=["csv"])
+    if uploaded is not None:
         try:
-            user_df=pd.read_csv(upload)
-            st.dataframe(user_df,use_container_width=True)
-            st.info("This upload is preview-only; it does not overwrite the live database. Edit app.py to permanently add destinations.")
-        except Exception as ex: st.error(f"Could not read CSV: {{ex}}")
-    st.warning("This is a local admin/data utility, not a secure multi-user admin login. Do not store private data here.")
+            preview_df = pd.read_csv(uploaded)
+            st.success("CSV loaded for preview only.")
+            st.dataframe(preview_df.head(100), use_container_width=True)
+        except Exception as exc:
+            st.error(f"Could not read this CSV: {exc}")
+    st.caption("There is no admin login or persistent database in this version. Uploaded CSV files are preview-only.")
 
+# TAB 9 — Toolkit
 with tabs[8]:
-    st.header("Trip preparation toolkit")
-    st.subheader("Checklist")
-    tasks=["Confirm return transport","Confirm accommodation and cancellation terms","Check weather and local warnings",
-           "Check attraction opening hours and entry fees","Check permits and local access restrictions",
-           "Carry valid ID and required documents","Save offline maps and emergency contacts",
-           "Keep emergency money separate","Share itinerary with a trusted person","Pack medicines, chargers and suitable clothing"]
-    done=[]
-    cols=st.columns(2)
-    for i,t in enumerate(tasks):
-        with cols[i%2]:
-            if st.checkbox(t,key="task_"+str(i)): done.append(t)
-    st.progress(len(done)/len(tasks),text=f"{{len(done)}} / {{len(tasks)}} completed")
-    st.download_button("Download checklist",pd.DataFrame({{"Completed task":done}}).to_csv(index=False).encode(),"trekverse_checklist.csv","text/csv")
-    st.subheader("Useful emergency and travel links")
-    st.write("India emergency response number: **112**. For immediate danger, contact local emergency services.")
-    st.link_button("India emergency response (112)", "https://112.gov.in/")
-    st.link_button("IRCTC train booking","https://www.irctc.co.in/")
-    st.link_button("Bus search","https://www.redbus.in/")
-    st.link_button("Flight search","https://www.google.com/travel/flights")
-    st.link_button("Hotel search","https://www.google.com/travel/hotels")
-    st.link_button("Incredible India destination information","https://www.incredibleindia.gov.in/")
-    st.link_button("Google Maps","https://www.google.com/maps")
-
-st.divider()
-st.caption("TrekVerse V6 • Built with Python, Streamlit, Pandas, Folium, OpenStreetMap, Open-Meteo and ReportLab.")
-st.caption("Critical limitations: estimates are illustrative, maps use approximate pins, weather depends on an external service, booking links are external, and no ticket/hotel booking or availability is confirmed. Chat is rule-based, not a generative AI model. Verify all details before spending money.")
+    st.header("Trip toolkit")
+    st.subheader("Packing checklist")
+    checklist_items = [
+        "Government ID and booking confirmations",
+        "Phone, charger and power bank",
+        "Reusable water bottle",
+        "Comfortable walking shoes",
+        "Weather-appropriate clothes",
+        "Personal medicines and basic first aid",
+        "Cash, cards and emergency contacts",
+        "Sun protection and personal hygiene items",
+        "Destination-specific permits / documents",
+    ]
+    for item in checklist_items:
+        st.checkbox(item, key="check_" + item)
+    st.divider()
+    st.subheader("Useful travel links")
+    link_cols = st.columns(3)
+    links = [
+        ("IRCTC train booking","https://www.irctc.co.in/"),
+        ("redBus","https://www.redbus.in/"),
+        ("Google Flights","https://www.google.com/travel/flights"),
+        ("Google Hotels","https://www.google.com/travel/hotels"),
+        ("Incredible India","https://www.incredibleindia.gov.in/"),
+        ("Google Maps","https://maps.google.com/"),
+    ]
+    for i, (label, url) in enumerate(links):
+        with link_cols[i % 3]:
+            st.link_button(label, url)
+    st.info("India emergency response number: **112**. For immediate emergencies, contact local authorities.")
+    st.caption("External links are shortcuts only. TrekVerse does not book tickets, hotels or activities.")
