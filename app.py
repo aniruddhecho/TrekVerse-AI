@@ -48,7 +48,7 @@ def estimate(d, days, people, comfort, fare_pp):
     local=d["local"]*days*people
     activities=d["activities"]*days*people
     intercity=fare_pp*people
-    return {{"stay":stay,"food":food,"local":local,"activities":activities,"intercity":intercity,"total":stay+food+local+activities+intercity}}
+    return {"stay": stay, "food": food, "local": local, "activities": activities, "intercity": intercity, "total": stay + food + local + activities + intercity}
 
 def itinerary_for(d, days):
     h=d["highlights"]
