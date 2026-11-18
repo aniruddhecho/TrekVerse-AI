@@ -119,7 +119,7 @@ with tabs[0]:
                 st.session_state.saved_places=saved
                 st.success("Saved to your favourites.")
     if matches:
-        df=pd.DataFrame([{{"Destination":d["place"],"State":d["state"],"Group estimate (₹)":c["total"],"Remaining (₹)":budget-c["total"],"Best season":d["months"]}} for _,_,d,c in matches])
+       df = pd.DataFrame([{"Destination": d["place"], "State": d["state"], "Group estimate (₹)": c["total"], "Remaining (₹)": budget - c["total"], "Best season": d["months"]} for _, _, d, c in matches])
         st.download_button("Download comparison CSV",df.to_csv(index=False).encode(), "trekverse_comparison.csv","text/csv")
 
 with tabs[1]:
