@@ -118,16 +118,26 @@ with tabs[0]:
                 if d["place"] not in saved: saved.append(d["place"])
                 st.session_state.saved_places=saved
                 st.success("Saved to your favourites.")
-    if matches:
-       df = pd.DataFrame([{"Destination": d["place"], "State": d["state"], "Group estimate (₹)": c["total"], "Remaining (₹)": budget - c["total"], "Best season": d["months"]} for _, _, d, c in matches])
-           df = pd.DataFrame([{"Destination": d["place"], "State": d["state"], "Group estimate (₹)": c["total"], "Remaining (₹)": budget - c["total"], "Best season": d["months"]} for _, _, d, c in matches])
+       if matches:
+        df = pd.DataFrame([
+            {
+                "Destination": d["place"],
+                "State": d["state"],
+                "Group estimate (₹)": c["total"],
+                "Remaining (₹)": budget - c["total"],
+                "Best season": d["months"]
+            }
+            for _, _, d, c in matches
+        ])
 
-    st.download_button("Download comparison CSV", df.to_csv(index=False).encode(), "trekverse_comparison.csv", "text/csv")
+        st.download_button(
+            "Download comparison CSV",
+            df.to_csv(index=False).encode(),
+            "trekverse_comparison.csv",
+            "text/csv"
+        )
+
 with tabs[1]:
-    st.header("Day-wise itinerary studio")
-    choices=[d for _,_,d,_ in matches] or DESTINATIONS
-    chosen=st.selectbox("Choose destination",[d["place"] for d in choices],key="itin_place")
-    d=next(x for x in DESTINATIONS if x["place"]==chosen)
     plan=itinerary_for(d,days)
     cost=estimate(d,days,people,comfort,fare_pp)
     st.subheader(f"{days}-day plan: {d['place']}")
